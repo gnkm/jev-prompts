@@ -1,4 +1,4 @@
-# Biome + pytest + Ruff + reuse lint。ライブ API は載せない。
+# Biome + pytest + Ruff + Import Linter + reuse lint。ライブ API は載せない。
 name: CI
 
 on:
@@ -60,6 +60,9 @@ jobs:
 
       - name: Check Ruff format
         run: uv run ruff format --check .
+
+      - name: Run Import Linter
+        run: uv run lint-imports
 
   reuse:
     runs-on: ubuntu-latest
