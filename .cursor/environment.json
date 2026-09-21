@@ -14,6 +14,8 @@
     "huggingface.co",
     "cdn-lfs.huggingface.co",
     "hf.co",
+    "raw.githubusercontent.com",
+    "media.githubusercontent.com",
     "archive.ics.uci.edu"
   ]
 }
