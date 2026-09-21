@@ -103,6 +103,11 @@ def expected_run_model(condition: str) -> str:
     return SONNET_MODEL_ID
 
 
+def _model_compatible(logged: str, expected: str) -> bool:
+    """API が返すパッチ付き ID を、要求モデルの系列として認める。"""
+    return logged == expected or logged.startswith(expected)
+
+
 def assert_resume_matches(
     existing: pl.DataFrame, cases: Sequence[RunCase | Mapping[str, Any]]
 ) -> None:
@@ -138,7 +143,7 @@ def assert_resume_matches(
         if model in {None, ""}:
             continue
         expected = expected_run_model(str(row["condition"]))
-        if str(model) != expected:
+        if not _model_compatible(str(model), expected):
             raise LogSchemaError(
                 f"既存ログの model が一致しない: {case.case_id}/"
                 f"{row.get('condition')} {model} != {expected}"
