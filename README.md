@@ -9,7 +9,25 @@ Jev に 3 つの課題を与え、精度の評価をおこなう。
 図が必要な箇所は画像を生成してそのファイルから参照する。Web UI は提供しない。
 表の処理は Polars を使う。
 
-実験コードは未実装、CI は整形のみ。Python のランナーやテストはまだ無く、GitHub Actions は Biome（`pnpm exec biome ci .`）だけを `main` と pull request で実行する。
+Python パッケージ `jev_prompts` の骨格（uv / pytest / Ruff / Typer / Polars）はある。CLI と集計の本実装は後続。
+GitHub Actions は Biome、pytest、Ruff を `main` と pull request で実行する。ライブ API は既定の CI に載せない。
+
+## セットアップ
+
+Python 3.12 と [uv](https://docs.astral.sh/uv/) を使う。`uv pip` は使わない。
+
+```bash
+uv python install 3.12
+uv sync
+```
+
+テストと lint:
+
+```bash
+uv run pytest
+uv run ruff check .
+uv run ruff format --check .
+```
 
 ## 比較用 LLM
 

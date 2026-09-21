@@ -1,4 +1,4 @@
-# 最小 CI: 今ある Biome だけ。Python ジョブとライブ API は載せない。
+# Biome + pytest + Ruff。ライブ API は載せない。
 name: CI
 
 on:
@@ -35,3 +35,28 @@ jobs:
 
       - name: Run Biome
         run: pnpm exec biome ci .
+
+  python:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: uv sync --frozen --all-extras --dev
+
+      - name: Run pytest
+        run: uv run pytest
+
+      - name: Run Ruff
+        run: uv run ruff check .
+
+      - name: Check Ruff format
+        run: uv run ruff format --check .
