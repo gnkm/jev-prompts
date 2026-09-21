@@ -13,7 +13,7 @@ from pathlib import Path
 from typer.testing import CliRunner
 
 from jev_prompts.config import JEV_MODEL_ID, LUNA_MODEL_ID, SONNET_MODEL_ID
-from jev_prompts.runners.cli import app
+from jev_prompts.report.cli import app
 
 ROOT = Path(__file__).resolve().parents[1]
 runner = CliRunner()
@@ -31,6 +31,7 @@ def test_help_lists_systemone_and_chat_model_ids() -> None:
     assert "fetch" in text
     assert "preflight" in text
     assert "fanout" in text
+    assert "report" in text
 
 
 def test_module_help_subprocess() -> None:

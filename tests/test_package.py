@@ -5,6 +5,7 @@
 """パッケージと実行時依存が import できること。"""
 
 import httpx
+import matplotlib
 import polars as pl
 import typer
 
@@ -16,3 +17,4 @@ def test_package_and_runtime_dependencies_import() -> None:
     assert pl.__version__
     assert typer.__version__
     assert httpx.__version__
+    assert matplotlib.__version__
