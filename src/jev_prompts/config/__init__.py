@@ -18,18 +18,20 @@ from jev_prompts.config.openrouter import (
     provider_routing,
     require_chat_pair,
 )
-from jev_prompts.config.paths import PROMPTS_DIR, REPO_ROOT
+from jev_prompts.config.paths import LOCAL_LOGS_DIR, PROMPTS_DIR, REPO_ROOT, RESULTS_DIR
 
 __all__ = [
     "API_KEY_ENV",
     "CHAT_COMPLETIONS_PATH",
     "CHAT_MODELS",
     "JEV_MODEL_ID",
+    "LOCAL_LOGS_DIR",
     "LUNA_MODEL_ID",
     "LUNA_PROVIDER",
     "OPENROUTER_BASE_URL",
     "PROMPTS_DIR",
     "REPO_ROOT",
+    "RESULTS_DIR",
     "SONNET_MODEL_ID",
     "SONNET_PROVIDER",
     "SYSTEMONE_PATH",

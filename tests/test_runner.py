@@ -1,0 +1,223 @@
+# SPDX-FileCopyrightText: 2026 gnkm
+#
+# SPDX-License-Identifier: MIT
+
+"""ランナーはケースネスト。公開行に本文キーは無く、probabilities は必須。"""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+import polars as pl
+import pytest
+
+from jev_prompts.data.schema import BODY_COLUMNS
+from jev_prompts.prompts import CONDITIONS
+from jev_prompts.runners import (
+    PUBLISHED_COLUMNS,
+    REQUEST_LOG_COLUMNS,
+    LogSchemaError,
+    RequestLog,
+    RunCase,
+    iter_case_conditions,
+    run_experiment,
+    to_published,
+    write_local_logs,
+    write_published_records,
+)
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+HASH_A = "a" * 64
+HASH_B = "b" * 64
+
+CASES = (
+    RunCase(
+        case_id="choice:c00",
+        task="choice",
+        split="test",
+        gold="ham",
+        content_hash=HASH_A,
+    ),
+    RunCase(
+        case_id="choice:c01",
+        task="choice",
+        split="test",
+        gold="spam",
+        content_hash=HASH_B,
+    ),
+)
+
+
+def _log(case: RunCase, condition: str, **overrides: object) -> RequestLog:
+    row: dict[str, object] = {
+        "case_id": case.case_id,
+        "task": case.task,
+        "condition": condition,
+        "split": case.split,
+        "probabilities": {"ham": 0.8, "spam": 0.2},
+        "gold": case.gold,
+        "content_hash": case.content_hash,
+        "model": "typesafe/jev-1.13",
+        "provider": None,
+        "state_json": {"text": f"body-{case.case_id}"},
+        "question_json": {"intent": {"type": "choice"}},
+        "answer": "ham",
+        "confidence": 0.8,
+        "usage_tokens": 12,
+        "latency_ms": 3.5,
+        "routing_json": {"allow_fallbacks": False},
+        "request_id": "req-1",
+    }
+    row.update(overrides)
+    return RequestLog(**row)  # type: ignore[arg-type]
+
+
+def test_run_order_is_case_nested_not_condition_nested() -> None:
+    calls: list[tuple[str, str]] = []
+
+    def execute(case: RunCase, condition: str) -> RequestLog:
+        calls.append((case.case_id, condition))
+        return _log(case, condition)
+
+    local, published = run_experiment(CASES, execute, conditions=CONDITIONS)
+    case_ids = [case.case_id for case in CASES]
+    case_nested = [(cid, cond) for cid in case_ids for cond in CONDITIONS]
+    condition_nested = [(cid, cond) for cond in CONDITIONS for cid in case_ids]
+
+    assert calls == case_nested
+    assert calls != condition_nested
+    assert local.height == len(CASES) * len(CONDITIONS)
+    assert published.height == local.height
+    assert local["case_id"].to_list() == [cid for cid, _ in case_nested]
+    assert local["condition"].to_list() == [cond for _, cond in case_nested]
+
+
+def test_iter_case_conditions_is_not_condition_outer() -> None:
+    pairs = list(iter_case_conditions(CASES, ("A", "B1")))
+    assert [(c.case_id, cond) for c, cond in pairs] == [
+        ("choice:c00", "A"),
+        ("choice:c00", "B1"),
+        ("choice:c01", "A"),
+        ("choice:c01", "B1"),
+    ]
+
+
+def test_one_request_one_row() -> None:
+    def execute(case: RunCase, condition: str) -> RequestLog:
+        return _log(case, condition)
+
+    local, _published = run_experiment(CASES, execute, conditions=("A", "C"))
+    assert local.height == 4
+    keys = list(
+        zip(local["case_id"].to_list(), local["condition"].to_list(), strict=True)
+    )
+    assert len(keys) == len(set(keys))
+
+
+def test_local_log_keeps_state_json_published_does_not() -> None:
+    def execute(case: RunCase, condition: str) -> RequestLog:
+        return _log(case, condition)
+
+    local, published = run_experiment(CASES[:1], execute, conditions=("A",))
+    assert "state_json" in local.columns
+    assert "question_json" in local.columns
+    parsed = json.loads(local["state_json"][0])
+    assert parsed["text"] == "body-choice:c00"
+    assert "state_json" not in published.columns
+    assert "question_json" not in published.columns
+    assert not (set(published.columns) & BODY_COLUMNS)
+    assert "content_hash" in published.columns
+    assert "probabilities" in published.columns
+
+
+@pytest.mark.parametrize("body_col", sorted(BODY_COLUMNS))
+def test_published_record_rejects_body_keys(body_col: str) -> None:
+    def execute(case: RunCase, condition: str) -> RequestLog:
+        return _log(case, condition)
+
+    _local, published = run_experiment(CASES[:1], execute, conditions=("A",))
+    dirty = published.with_columns(pl.lit("secret").alias(body_col))
+    with pytest.raises(LogSchemaError, match="本文フィールド"):
+        write_published_records(dirty, Path("unused.jsonl"))
+
+
+def test_to_published_drops_body_and_keeps_probabilities(tmp_path: Path) -> None:
+    def execute(case: RunCase, condition: str) -> RequestLog:
+        return _log(case, condition)
+
+    local, _published = run_experiment(CASES[:1], execute, conditions=("A",))
+    published = to_published(local)
+    assert set(published.columns) == set(PUBLISHED_COLUMNS)
+    assert "state_json" in set(REQUEST_LOG_COLUMNS)
+    assert "state_json" not in set(PUBLISHED_COLUMNS)
+    probs = json.loads(published["probabilities"][0])
+    assert probs == {"ham": 0.8, "spam": 0.2}
+
+    local_path = tmp_path / "local.jsonl"
+    pub_path = tmp_path / "published.jsonl"
+    write_local_logs(local, local_path)
+    write_published_records(published, pub_path)
+    local_text = local_path.read_text(encoding="utf-8")
+    pub_text = pub_path.read_text(encoding="utf-8")
+    assert "state_json" in local_text
+    assert "body-choice:c00" in local_text
+    assert "state_json" not in pub_text
+    assert "body-choice:c00" not in pub_text
+    assert "probabilities" in pub_text
+
+
+def test_probabilities_required() -> None:
+    case = CASES[0]
+    with pytest.raises(TypeError):
+        RequestLog(
+            case_id=case.case_id,
+            task=case.task,
+            condition="A",
+            split=case.split,
+            gold=case.gold,
+            content_hash=case.content_hash,
+        )
+    with pytest.raises(LogSchemaError, match="probabilities"):
+        RequestLog(
+            case_id=case.case_id,
+            task=case.task,
+            condition="A",
+            split=case.split,
+            gold=case.gold,
+            content_hash=case.content_hash,
+            probabilities=None,  # type: ignore[arg-type]
+        )
+
+
+def test_execute_exception_becomes_error_row_with_probabilities() -> None:
+    def execute(case: RunCase, condition: str) -> RequestLog:
+        raise RuntimeError("boom")
+
+    local, published = run_experiment(CASES[:1], execute, conditions=("A",))
+    assert local.height == 1
+    assert "boom" in local["error"][0]
+    assert json.loads(local["probabilities"][0]) == {}
+    assert published["error"][0] == local["error"][0]
+    assert "state_json" not in published.columns
+
+
+def test_logs_are_polars_frames() -> None:
+    def execute(case: RunCase, condition: str) -> RequestLog:
+        return _log(case, condition)
+
+    local, published = run_experiment(CASES[:1], execute, conditions=("A",))
+    assert isinstance(local, pl.DataFrame)
+    assert isinstance(published, pl.DataFrame)
+
+
+def test_gitignore_excludes_local_logs() -> None:
+    gitignore = (REPO_ROOT / ".gitignore").read_text(encoding="utf-8")
+    assert "data/logs/" in gitignore
+
+
+def test_readme_describes_case_nested_runner() -> None:
+    readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
+    assert "ケースごとに全条件" in readme
+    assert "PublishedRecord" in readme
+    assert "data/logs/" in readme
