@@ -12,12 +12,7 @@
     "relevance": {
       "type": "score",
       "instructions": "Rate how relevant this product is.",
-      "criteria": [
-        "1",
-        "2",
-        "3",
-        "4"
-      ]
+      "criteria": ["1", "2", "3", "4"]
     }
   }
 }
