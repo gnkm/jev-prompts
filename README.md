@@ -42,7 +42,7 @@ uv run reuse lint
 
 - B2 は A と `instructions` が同一で、`criteria` だけが違う。
 - C は A と `questions` が同一で、`state` のキーだけが増える。Choice の C は約 2,000 トークン相当の規約ノイズを `terms_of_service` に置く。
-- L2 作成時間の欄は `prompts/creation_time.json` の各課題の `L2`（単位は分、未記入は `null`）。
+- L2 作成時間は `prompts/creation_time.json` の各課題の `L2`（単位は分）。
 - ランナーはカタログを読み、欠けた `questions` を A から補完しない。
 
 読み出しは `jev_prompts.prompts.load_bundle`。中身の改訂は JSON を編集する。

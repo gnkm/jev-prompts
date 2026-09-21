@@ -278,12 +278,15 @@ def test_choice_c_state_is_large() -> None:
     assert len(str(noisy["terms_of_service"])) >= 4000
 
 
-def test_l2_creation_time_field_exists() -> None:
+def test_creation_times_are_recorded_minutes() -> None:
     path = PROMPTS_DIR / "creation_time.json"
     raw = json.loads(path.read_text(encoding="utf-8"))
     assert raw["unit"] == "minutes"
     for task in TASKS:
-        assert "L2" in raw[task]
+        for condition in ("A", "L2"):
+            minutes = raw[task][condition]
+            assert isinstance(minutes, int)
+            assert minutes >= 1
 
 
 @pytest.mark.parametrize("condition", ["L1", "L2"])

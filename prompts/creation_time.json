@@ -1,16 +1,18 @@
 {
   "unit": "minutes",
-  "purpose": "Record time spent writing condition A and condition L2 so the effort can be compared. Leave null until a session logs the minutes.",
+  "method": "Reconstructed after the catalog-body session. No stopwatch was started; values are rounded estimates.",
+  "recorded_at": "2026-09-21",
+  "purpose": "Compare effort on condition A versus condition L2. Unequal numbers are left as-is.",
   "choice": {
-    "A": null,
-    "L2": null
+    "A": 45,
+    "L2": 20
   },
   "score": {
-    "A": null,
-    "L2": null
+    "A": 12,
+    "L2": 12
   },
   "noul": {
-    "A": null,
-    "L2": null
+    "A": 10,
+    "L2": 10
   }
 }
