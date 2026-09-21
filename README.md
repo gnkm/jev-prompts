@@ -10,9 +10,10 @@ Jev に 3 つの課題を与え、精度の評価をおこなう。
 表の処理は Polars を使う。
 
 Python パッケージ `jev_prompts` の骨格（uv / pytest / Ruff / Typer / Polars）と、ケースネストの実験ランナーがある。集計・検定の本実装は後続。
+入口は `python -m jev_prompts`（Typer）。準備は `fetch`、実行は `preflight` / `run` / `fanout` で切り分ける。ロジックは `jev_prompts` に置き、`scripts/` は薄い入口である。
 パッケージは `report → stats → metrics → runners → prompts → clients → data → config` の一方向レイヤで、Import Linter が逆向きの import を止める。
 ケース台帳は `case_id` / split / gold / content_hash / 抽出シードを Polars で扱う。本文は同梱しない。
-`scripts/fetch_data.py` が BANKING77 / Amazon ESCI / SMS Spam を `data/raw/` へ取得し、台帳のハッシュと照合する。
+`python -m jev_prompts fetch`（または `scripts/fetch_data.py`）が BANKING77 / Amazon ESCI / SMS Spam を `data/raw/` へ取得し、台帳のハッシュと照合する。
 プロンプトの正本は `prompts/` の JSON である。`src/jev_prompts/prompts` はそこを読むだけで、A からの 1 軸差分を Python でその場生成しない。Choice の A は BANKING77 の 77 意図と `other`、B1 / B2 は 77 意図のみ。L2 の作成時間は `prompts/creation_time.json` に分で残す。
 実験ランナーはケースごとに全条件を連続実行し、1 リクエスト 1 行を Polars で書く。`probabilities` は必須。`state_json` / `question_json` は `data/logs/` のローカルログだけに置き、公開用 `PublishedRecord` に本文キーは無い。
 GitHub Actions は Biome、pytest、Ruff、Import Linter、reuse lint を `main` と pull request で実行する。ライブ API と実ネットでのデータ取得は既定の CI に載せない。
@@ -35,6 +36,31 @@ uv run ruff format --check .
 uv run lint-imports
 uv run reuse lint
 ```
+
+## CLI
+
+入口は `uv run python -m jev_prompts`。`--help` に System One（`systemone`）と比較用 LLM（`chat`）のモデル ID が出る。
+
+準備と実行を混ぜない。配布元からの取得はクローン後（または台帳を変えるとき）に一度だけ行い、本ランは `data/` だけを読む。
+
+```bash
+# 準備（Hugging Face / GitHub / UCI から data/raw へ。API キーは不要）
+uv run python -m jev_prompts fetch
+# 同等の薄い入口: uv run python scripts/fetch_data.py
+
+# 実行（OPENROUTER_API_KEY と本文が要る。無ければ非ゼロ終了）
+uv run python -m jev_prompts preflight
+uv run python -m jev_prompts run
+uv run python -m jev_prompts fanout
+```
+
+- `preflight`: 決定性・トークン上限（32k）・応答のモデル版を事前確認する。失敗したら本ランに進まない。
+- `run`: ケースごとに全条件を連続実行する精度比較。fan-out は含めない。
+- `fanout`: A の質問群を 1 回にまとめる / 分割する別ラン。コスト・遅延・一致率だけを見る。
+
+キーは環境変数 `OPENROUTER_API_KEY`（再現ランでは Podman secret）。本文が無い、ハッシュが台帳と一致しない、台帳が無い、または空なら実行系は失敗する。暗黙の再取得はしない。
+
+ライブ API は既定の CI に載せない。
 
 ## プロンプト
 
@@ -65,9 +91,10 @@ uv run reuse lint
 クローン後（または別マシンで再現するとき）に、配布元から取得してハッシュを照合する。
 
 ```bash
-uv run python scripts/fetch_data.py
+uv run python -m jev_prompts fetch
 ```
 
+`scripts/fetch_data.py` も同じ fetch の薄い入口である。
 ハッシュが台帳と一致しない、台帳が無い、または空ならコマンドは失敗する。
 実験ランナーは `data/` だけを読み、Hugging Face / GitHub / UCI には触れない。
 本文が無ければ失敗し、暗黙の再取得はしない。

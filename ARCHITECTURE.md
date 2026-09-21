@@ -197,7 +197,8 @@ REUSE の SPDX 識別子をファイルに付け、`reuse lint` で検証する�
 │   ├── score/
 │   ├── noul/
 │   └── llm/
-├── scripts/                  MIT  Typer の入口。fetch / run_eval / run_fanout
+├── scripts/                  MIT  Typer の薄い入口。fetch / run_eval / run_fanout
+│                             本体は `python -m jev_prompts`（fetch / preflight / run / fanout）
 ├── tests/                    MIT  ライブ API を既定の CI に含めない
 ├── data/                     Git 管理外（本文）。台帳メタデータのみ追跡対象
 │   ├── raw/                  配布元の展開物

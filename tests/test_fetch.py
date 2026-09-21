@@ -330,8 +330,8 @@ def test_source_id_from_case_id_keeps_split() -> None:
 
 def test_fetch_script_exists() -> None:
     script = (REPO_ROOT / "scripts" / "fetch_data.py").read_text(encoding="utf-8")
-    assert "fetch_and_verify" in script
-    assert "typer" in script
+    assert "jev_prompts.runners.cli" in script
+    assert "fetch_command" in script
 
 
 def test_default_transport_is_urllib() -> None:

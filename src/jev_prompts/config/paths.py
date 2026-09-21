@@ -9,5 +9,7 @@ from pathlib import Path
 # src/jev_prompts/config/paths.py → リポジトリルート
 REPO_ROOT = Path(__file__).resolve().parents[3]
 PROMPTS_DIR = REPO_ROOT / "prompts"
+RAW_DIR = REPO_ROOT / "data" / "raw"
+CASES_DIR = REPO_ROOT / "data" / "cases"
 LOCAL_LOGS_DIR = REPO_ROOT / "data" / "logs"
 RESULTS_DIR = REPO_ROOT / "results"
