@@ -26,7 +26,7 @@ from jev_prompts.runners import (
     write_local_logs,
     write_published_records,
 )
-from jev_prompts.runners.execute import repeating_execute
+from jev_prompts.runners.execute import _usage_tokens, repeating_execute
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 HASH_A = "a" * 64
@@ -299,3 +299,10 @@ def test_repeating_execute_averages_numeric_answers() -> None:
     assert log.usage_tokens == 36
     assert log.routing_json is not None
     assert log.routing_json["repeats"] == 3
+
+
+def test_usage_tokens_reads_input_output_keys() -> None:
+    assert _usage_tokens({"input_tokens": 10, "output_tokens": 2}) == 12
+    assert _usage_tokens({"prompt_tokens": 3, "completion_tokens": 4}) == 7
+    assert _usage_tokens({"total_tokens": 9, "input_tokens": 1}) == 9
+    assert _usage_tokens({}) is None

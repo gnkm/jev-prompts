@@ -33,20 +33,31 @@ from jev_prompts.runners.payload import materialize_messages, materialize_state
 from jev_prompts.runners.schema import RequestLog
 
 
-def _usage_tokens(usage: Mapping[str, Any] | None) -> int | None:
-    if not usage:
-        return None
-    for key in ("total_tokens", "totalTokens"):
+def _usage_part(usage: Mapping[str, Any], *keys: str) -> int | None:
+    for key in keys:
         value = usage.get(key)
         if isinstance(value, int | float) and not isinstance(value, bool):
             return int(value)
-    prompt = usage.get("prompt_tokens", usage.get("promptTokens"))
-    completion = usage.get("completion_tokens", usage.get("completionTokens"))
-    parts = [
-        int(item)
-        for item in (prompt, completion)
-        if isinstance(item, int | float) and not isinstance(item, bool)
-    ]
+    return None
+
+
+def _usage_tokens(usage: Mapping[str, Any] | None) -> int | None:
+    if not usage:
+        return None
+    total = _usage_part(usage, "total_tokens", "totalTokens")
+    if total is not None:
+        return total
+    prompt = _usage_part(
+        usage, "prompt_tokens", "promptTokens", "input_tokens", "inputTokens"
+    )
+    completion = _usage_part(
+        usage,
+        "completion_tokens",
+        "completionTokens",
+        "output_tokens",
+        "outputTokens",
+    )
+    parts = [item for item in (prompt, completion) if item is not None]
     if not parts:
         return None
     return sum(parts)

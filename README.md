@@ -69,7 +69,7 @@ uv run python -m jev_prompts findings
 - `fanout`: A の質問群を 1 回にまとめる / 分割する別ラン。コスト・遅延・一致率だけを見る。
 - `prices`: 測定日の OpenRouter 掲載単価を `results/prices.md` に書く。キーが要る。既定の CI には載せない。
 - `report`: `results/published.jsonl` から指標マトリクス・較正・コスト×精度の markdown と図を `results/` に書く。API キーは不要。同等の薄い入口は `scripts/write_report.py`。
-- `findings`: H1〜H4 の判定と A の誤答内訳を `results/findings.md` に書く。入力本文は出さない。
+- `findings`: H1〜H4 の判定と A の誤答内訳を `results/findings.md` に書く。入力本文は出さない。目視分類があれば `results/a_error_review.jsonl` を読む。
 
 キーは環境変数 `OPENROUTER_API_KEY`（再現ランでは Podman secret）。本文が無い、ハッシュが台帳と一致しない、台帳が無い、または空なら実行系は失敗する。暗黙の再取得はしない。
 
@@ -128,7 +128,9 @@ uv run python scripts/run_fanout.py --mock --log-dir data/logs
 
 合格ライン（例: Choice で A が B1 に対し top-1 +5pt）はコードのアサーションにしない。レポートの判定欄で使う。既知の RequestLog フィクスチャで数値が手計算と一致することをテストする。
 
-`jev_prompts.report.write_report` が公開行から `results/report.md` を書く。課題ごとの条件 × 指標（ブートストラップ CI 付き）、10 ビンの較正表と reliability diagram、コスト × 精度の表と散布図。図は `results/figures/` に出し、markdown から参照する。`query` / `message` / `state_json` は出さない。測定値の扱いは [results/README.md](results/README.md)。
+`jev_prompts.report.write_report` が公開行から `results/report.md` を書く。課題ごとの条件 × 指標（ブートストラップ CI 付き）、10 ビンの較正表と reliability diagram、コスト × 精度の表と散布図。図は `results/figures/` に出し、markdown から参照する。入力本文のフィールドは出さない。測定値の扱いは [results/README.md](results/README.md)。
+
+本ラン（test 60 件 × 8 条件 × 3 課題）の仮説 H1〜H4 と A の誤答目視は `results/findings.md`、測定日の単価は `results/prices.md`。ライブ API は既定の CI に載せない。
 
 ## データ
 

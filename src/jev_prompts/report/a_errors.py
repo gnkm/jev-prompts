@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from collections import Counter
 from collections.abc import Mapping
+from pathlib import Path
 from typing import Any
 
 import polars as pl
@@ -22,6 +23,7 @@ ERROR_MODES = (
     "label_noise",
     "call_failed",
 )
+REVIEW_COLUMNS = ("case_id", "task", "mode")
 MODE_LABELS = {
     "literal": "字義どおり",
     "overlap": "選択肢の重なり",
@@ -70,6 +72,28 @@ def classify_a_errors(logs: pl.DataFrame) -> pl.DataFrame:
             for (task, mode), n in sorted(counts.items())
         ]
     )
+
+
+def read_error_review(path: Path) -> pl.DataFrame:
+    """目視分類。case_id / task / mode だけ。本文列は拒否する。"""
+    frame = pl.read_ndjson(path)
+    missing = [name for name in REVIEW_COLUMNS if name not in frame.columns]
+    if missing:
+        raise ValueError(f"目視分類に必須列が無い: {', '.join(missing)}")
+    extra = sorted(set(frame.columns) - set(REVIEW_COLUMNS))
+    if extra:
+        raise ValueError(f"目視分類に本文列を書いてはいけない: {', '.join(extra)}")
+    unknown = sorted(set(frame["mode"].drop_nulls().to_list()) - set(ERROR_MODES))
+    if unknown:
+        raise ValueError(f"未知の失敗モード: {', '.join(str(m) for m in unknown)}")
+    counted = (
+        frame.group_by(["task", "mode"])
+        .len()
+        .rename({"len": "n"})
+        .sort(["task", "mode"])
+        .with_columns(pl.col("n").cast(pl.UInt32))
+    )
+    return counted.select("task", "mode", "n")
 
 
 def _is_correct(task: str, gold: Any, answer: Any) -> bool:

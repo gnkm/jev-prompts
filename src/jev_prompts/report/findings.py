@@ -15,7 +15,7 @@ from jev_prompts.config.metrics import CONFIDENT_THRESHOLD
 from jev_prompts.metrics import aggregate_metrics
 from jev_prompts.report.a_errors import MODE_LABELS, classify_a_errors
 from jev_prompts.report.forbidden import reject_forbidden_text
-from jev_prompts.report.prices import ModelPrice, render_prices
+from jev_prompts.report.prices import ModelPrice, render_price_table
 from jev_prompts.report.tables import fmt_float, markdown_table
 from jev_prompts.stats.compare import compare_paired
 
@@ -43,8 +43,14 @@ def render_findings(
         "",
     ]
     if prices:
-        parts.extend(render_prices(prices, measured_on=measured_on).splitlines()[1:])
-        parts.append("")
+        parts.extend(
+            [
+                "## 測定単価",
+                "",
+                *render_price_table(prices),
+                "",
+            ]
+        )
     parts.extend(_h1_section(metrics))
     parts.extend(_h2_section(metrics))
     parts.extend(_h3_section(metrics))
@@ -304,7 +310,9 @@ def _h4_section(metrics: pl.DataFrame) -> list[str]:
         ok, text = bit
         wins.append(ok)
         notes.append(text)
-    extra = notes or ["- L1 と比較できる行が無い"]
+    extra = notes or [
+        "- A の tokens_per_1000 が空のため、L1 とコストを並べて判定できない"
+    ]
     verdict = _verdict(all(wins) if wins else None)
     lines.extend([*extra, f"- 判定: {verdict}", ""])
     return lines
@@ -333,6 +341,7 @@ def _errors_section(errors: pl.DataFrame) -> list[str]:
         "## A の誤答",
         "",
         "目視分類の内訳。本文は載せていない。",
+        "ローカルログを見て失敗モードに振った。公開行には件数だけ残す。",
         "",
     ]
     if errors.height == 0:

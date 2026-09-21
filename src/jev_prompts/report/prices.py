@@ -112,13 +112,8 @@ def fetch_prices(*, timeout: float = HTTP_TIMEOUT_SECONDS) -> tuple[ModelPrice, 
         return prices_from_catalog(fetch_model_catalog(http))
 
 
-def render_prices(prices: tuple[ModelPrice, ...], *, measured_on: date) -> str:
-    """markdown。本文キーは出さない。"""
+def render_price_table(prices: tuple[ModelPrice, ...]) -> list[str]:
     lines = [
-        "# 測定単価",
-        "",
-        f"測定日: {measured_on.isoformat()}",
-        "",
         "単位は 1M トークンあたり USD（入力 / 出力）。OpenRouter 掲載値。",
         "",
         "| モデル | 入力 | 出力 |",
@@ -135,8 +130,50 @@ def render_prices(prices: tuple[ModelPrice, ...], *, measured_on: date) -> str:
             else f"{row.completion_per_million:.6g}"
         )
         lines.append(f"| `{row.model_id}` | {prompt} | {completion} |")
-    lines.append("")
+    return lines
+
+
+def render_prices(prices: tuple[ModelPrice, ...], *, measured_on: date) -> str:
+    """markdown。本文キーは出さない。"""
+    lines = [
+        "# 測定単価",
+        "",
+        f"測定日: {measured_on.isoformat()}",
+        "",
+        *render_price_table(prices),
+        "",
+    ]
     return "\n".join(lines)
+
+
+def read_measured_on(path: Path) -> date | None:
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if line.startswith("測定日:"):
+            return date.fromisoformat(line.split(":", 1)[1].strip())
+    return None
+
+
+def read_prices_markdown(path: Path) -> tuple[ModelPrice, ...]:
+    """prices.md の表から単価を戻す。"""
+    rows: list[ModelPrice] = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        stripped = line.strip()
+        if not stripped.startswith("| `"):
+            continue
+        cells = [cell.strip() for cell in stripped.strip("|").split("|")]
+        if len(cells) < 3:
+            continue
+        model_id = cells[0].strip("`")
+        prompt = None if cells[1] == "" else float(cells[1])
+        completion = None if cells[2] == "" else float(cells[2])
+        rows.append(
+            ModelPrice(
+                model_id=model_id,
+                prompt_per_million=prompt,
+                completion_per_million=completion,
+            )
+        )
+    return tuple(rows)
 
 
 def write_prices(

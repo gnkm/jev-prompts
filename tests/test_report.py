@@ -251,5 +251,16 @@ def test_results_readme_mentions_measurements() -> None:
     text = (REPO_ROOT / "results/README.md").read_text(encoding="utf-8")
     assert "測定値" in text
     assert "report.md" in text
-    assert "query" in text
-    assert "state_json" in text
+    assert "findings.md" in text
+    assert "prices.md" in text
+    assert "入力本文" in text
+
+
+def test_checked_in_results_omit_forbidden_tokens() -> None:
+    root = REPO_ROOT / "results"
+    paths = [path for path in root.rglob("*") if path.is_file()]
+    assert paths
+    for path in paths:
+        text = path.read_bytes().decode("utf-8", errors="ignore")
+        for token in FORBIDDEN_TOKENS:
+            assert token not in text, f"{path}: {token}"
