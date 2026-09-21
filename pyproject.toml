@@ -11,6 +11,9 @@ dependencies = [
     "typer>=0.15",
 ]
 
+[project.scripts]
+jev-prompts = "jev_prompts.runners.cli:app"
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
@@ -82,3 +85,4 @@ layers = [
     "config",
 ]
 exhaustive = true
+exhaustive_ignores = ["__main__"]

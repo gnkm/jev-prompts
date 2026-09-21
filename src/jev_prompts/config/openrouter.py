@@ -34,6 +34,9 @@ MAIN_TEMPERATURE: Final = 0
 MAIN_SEED: Final = 20260921
 
 HTTP_TIMEOUT_SECONDS: Final = 60.0
+CONTEXT_WINDOW_TOKENS: Final = 32_000
+DETERMINISM_SAMPLE_SIZE: Final = 10
+NONDETERMINISTIC_REPEATS: Final = 3
 
 
 def provider_routing(order: str) -> dict[str, object]:
