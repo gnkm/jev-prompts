@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import shutil
 import subprocess
 import tomllib
 from pathlib import Path
@@ -18,14 +19,27 @@ def _xenon_cfg() -> dict[str, object]:
     return data["tool"]["xenon"]
 
 
-def _run_check() -> subprocess.CompletedProcess[str]:
+def _run_check(script: Path | None = None) -> subprocess.CompletedProcess[str]:
+    # CI と同じラッパー。script を渡すと、そのコピーの ROOT（親の親）を対象にする。
+    target = "scripts/check_complexity.py" if script is None else str(script)
     return subprocess.run(
-        ["uv", "run", "python", "scripts/check_complexity.py"],
+        ["uv", "run", "python", target],
         cwd=ROOT,
         capture_output=True,
         text=True,
         check=False,
     )
+
+
+def _copied_project(tmp_path: Path) -> Path:
+    dest = tmp_path / "project"
+    names = [str(path) for path in _xenon_cfg()["paths"]]
+    if "scripts" not in names:
+        names.append("scripts")
+    for name in names:
+        shutil.copytree(ROOT / name, dest / name)
+    shutil.copy2(ROOT / "pyproject.toml", dest / "pyproject.toml")
+    return dest
 
 
 def _over_threshold_source() -> str:
@@ -57,27 +71,14 @@ def test_readme_and_ci_name_xenon_thresholds() -> None:
 
 
 def test_xenon_fails_when_block_exceeds_threshold(tmp_path: Path) -> None:
-    cfg = _xenon_cfg()
-    target = tmp_path / "too_complex.py"
-    target.write_text(_over_threshold_source(), encoding="utf-8")
-    result = subprocess.run(
-        [
-            "uv",
-            "run",
-            "xenon",
-            "--max-absolute",
-            str(cfg["max_absolute"]),
-            "--max-modules",
-            str(cfg["max_modules"]),
-            "--max-average",
-            str(cfg["max_average"]),
-            str(target),
-        ],
-        cwd=ROOT,
-        capture_output=True,
-        text=True,
-        check=False,
+    project = _copied_project(tmp_path)
+    paths = [str(path) for path in _xenon_cfg()["paths"]]
+    assert paths, "[tool.xenon].paths が空"
+    (project / paths[0] / "too_complex.py").write_text(
+        _over_threshold_source(),
+        encoding="utf-8",
     )
+    result = _run_check(script=project / "scripts" / "check_complexity.py")
     assert result.returncode != 0, result.stdout + result.stderr
     combined = result.stdout + result.stderr
     assert "too_complex" in combined
