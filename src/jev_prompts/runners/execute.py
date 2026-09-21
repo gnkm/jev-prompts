@@ -7,7 +7,8 @@
 from __future__ import annotations
 
 import time
-from collections.abc import Mapping
+from collections import Counter
+from collections.abc import Callable, Mapping, Sequence
 from typing import Any
 
 from jev_prompts.clients import (
@@ -200,3 +201,76 @@ def execute_for_experiment(
         return execute_case(client, case, condition, record, prompts_root=prompts_root)
 
     return execute
+
+
+def average_request_logs(logs: Sequence[RequestLog]) -> RequestLog:
+    """非決定時の複数回実行を 1 行に平均する。失敗があれば失敗のまま返す。"""
+    if not logs:
+        raise ValueError("平均するログが無い")
+    failed = [log for log in logs if log.error]
+    if failed:
+        return failed[0]
+    first = logs[0]
+    n = len(logs)
+    keys: set[str] = set()
+    for log in logs:
+        keys.update(log.probabilities)
+    probabilities = {
+        key: sum(log.probabilities.get(key, 0.0) for log in logs) / n for key in keys
+    }
+    answers = [log.answer for log in logs]
+    if all(
+        isinstance(item, int | float) and not isinstance(item, bool) for item in answers
+    ):
+        answer: str | float | None = sum(float(item) for item in answers) / n
+    else:
+        strings = [item for item in answers if isinstance(item, str)]
+        answer = Counter(strings).most_common(1)[0][0] if strings else first.answer
+
+    def mean(attr: str) -> float | None:
+        values = [
+            getattr(log, attr)
+            for log in logs
+            if isinstance(getattr(log, attr), int | float)
+            and not isinstance(getattr(log, attr), bool)
+        ]
+        if not values:
+            return None
+        return sum(values) / len(values)
+
+    usage = mean("usage_tokens")
+    return RequestLog(
+        case_id=first.case_id,
+        task=first.task,
+        condition=first.condition,
+        split=first.split,
+        probabilities=probabilities,
+        gold=first.gold,
+        content_hash=first.content_hash,
+        model=first.model,
+        provider=first.provider,
+        request_id=first.request_id,
+        routing_json=first.routing_json,
+        state_json=first.state_json,
+        question_json=first.question_json,
+        answer=answer,
+        confidence=mean("confidence"),
+        usage_tokens=None if usage is None else int(round(usage)),
+        latency_ms=mean("latency_ms"),
+    )
+
+
+def repeating_execute(
+    execute: Callable[[RunCase, str], RequestLog], repeats: int
+) -> Callable[[RunCase, str], RequestLog]:
+    """repeats 回実行して平均した execute を返す。"""
+    if repeats < 1:
+        raise ValueError("repeats は 1 以上")
+    if repeats == 1:
+        return execute
+
+    def wrapped(case: RunCase, condition: str) -> RequestLog:
+        logs = [execute(case, condition) for _ in range(repeats)]
+        return average_request_logs(logs)
+
+    return wrapped

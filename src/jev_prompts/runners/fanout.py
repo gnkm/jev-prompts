@@ -6,9 +6,11 @@
 
 from __future__ import annotations
 
+import json
 import time
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Literal
 
 from jev_prompts.clients import JevResult, OpenRouterClient
@@ -154,3 +156,25 @@ def run_fanout(
         run_fanout_case(client, case, record, prompts_root=prompts_root)
         for case, record in cases
     ]
+
+
+def fanout_row(item: FanoutCaseResult) -> dict[str, Any]:
+    return {
+        "case_id": item.case_id,
+        "task": item.task,
+        "batched_ms": item.batched_ms,
+        "split_ms": item.split_ms,
+        "batched_tokens": item.batched_tokens,
+        "split_tokens": item.split_tokens,
+        "agreed": item.agreed,
+        "compared": item.compared,
+    }
+
+
+def write_fanout_results(results: Sequence[FanoutCaseResult], path: Path) -> None:
+    """batched / split の遅延とトークンを jsonl で残す。"""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    lines = [
+        json.dumps(fanout_row(item), ensure_ascii=False) + "\n" for item in results
+    ]
+    path.write_text("".join(lines), encoding="utf-8")

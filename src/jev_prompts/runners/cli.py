@@ -24,9 +24,15 @@ from jev_prompts.config import (
 )
 from jev_prompts.data.fetch import FetchError, fetch_and_verify
 from jev_prompts.runners.experiment import run_experiment
-from jev_prompts.runners.fanout import FanoutError, run_fanout
+from jev_prompts.runners.fanout import FanoutError, run_fanout, write_fanout_results
 from jev_prompts.runners.payload import MissingBodyError, load_run_cases
-from jev_prompts.runners.preflight import PreflightError, require_api_key, run_preflight
+from jev_prompts.runners.preflight import (
+    PreflightError,
+    read_repeats,
+    require_api_key,
+    run_preflight,
+    write_preflight_report,
+)
 from jev_prompts.runners.schema import write_local_logs, write_published_records
 
 APP_HELP = f"""Jev プロンプト実験の CLI。
@@ -80,6 +86,9 @@ def fetch_command(
 def preflight_command(
     raw_dir: RawDir = RAW_DIR,
     cases_dir: CasesDir = CASES_DIR,
+    logs_dir: Annotated[
+        Path, typer.Option("--logs-dir", help="判定の書き出し先")
+    ] = LOCAL_LOGS_DIR,
 ) -> None:
     """実行前: 決定性・トークン・モデル版を確認する。本文とキーが要る。"""
     _guard_execution()
@@ -87,6 +96,7 @@ def preflight_command(
         report = run_preflight(raw_dir, cases_dir)
     except (MissingApiKeyError, MissingBodyError, FetchError, PreflightError) as exc:
         _fail(str(exc))
+    write_preflight_report(report, logs_dir / "preflight.json")
     typer.echo(f"モデル版: {report.model}")
     for check in report.token_checks:
         typer.echo(
@@ -97,6 +107,7 @@ def preflight_command(
     else:
         typer.echo(f"決定性: 不一致のため本ランは {report.repeats} 回平均")
     typer.echo(f"本文照合: {report.bodies} 件")
+    typer.echo(f"判定: {logs_dir / 'preflight.json'}")
 
 
 @app.command("run")
@@ -116,19 +127,22 @@ def run_command(
         pairs = load_run_cases(raw_dir, cases_dir)
     except (MissingBodyError, FetchError) as exc:
         _fail(str(exc))
-    from jev_prompts.runners.execute import execute_for_experiment
+    from jev_prompts.runners.execute import execute_for_experiment, repeating_execute
 
+    try:
+        repeats = read_repeats(logs_dir / "preflight.json")
+    except PreflightError as exc:
+        _fail(str(exc))
     cases = [case for case, _record in pairs]
     records = {case.case_id: record for case, record in pairs}
     with OpenRouterClient() as client:
-        local, published = run_experiment(
-            cases, execute_for_experiment(client, records)
-        )
+        execute = repeating_execute(execute_for_experiment(client, records), repeats)
+        local, published = run_experiment(cases, execute)
     logs_dir.mkdir(parents=True, exist_ok=True)
     results_dir.mkdir(parents=True, exist_ok=True)
     write_local_logs(local, logs_dir / "request_log.jsonl")
     write_published_records(published, results_dir / "published.jsonl")
-    typer.echo(f"本ラン {local.height} 行")
+    typer.echo(f"本ラン {local.height} 行（{repeats} 回平均）")
     typer.echo(f"ローカルログ: {logs_dir / 'request_log.jsonl'}")
     typer.echo(f"公開行: {results_dir / 'published.jsonl'}")
 
@@ -137,6 +151,9 @@ def run_command(
 def fanout_command(
     raw_dir: RawDir = RAW_DIR,
     cases_dir: CasesDir = CASES_DIR,
+    logs_dir: Annotated[
+        Path, typer.Option("--logs-dir", help="fan-out 測定の書き出し先")
+    ] = LOCAL_LOGS_DIR,
 ) -> None:
     """fan-out 別ラン: A の質問を 1 回にまとめる / 分割する。精度比較には入れない。"""
     _guard_execution()
@@ -151,10 +168,27 @@ def fanout_command(
         FanoutError,
     ) as exc:
         _fail(str(exc))
+    path = logs_dir / "fanout.jsonl"
+    write_fanout_results(results, path)
     agreed = sum(item.agreed for item in results)
     compared = sum(item.compared for item in results)
+    batched_ms = sum(item.batched_ms for item in results)
+    split_ms = sum(item.split_ms for item in results)
     typer.echo(f"fan-out {len(results)} ケース")
     typer.echo(f"答えの一致: {agreed} / {compared}")
+    typer.echo(f"batched 遅延合計: {batched_ms:.1f} ms")
+    typer.echo(f"split 遅延合計: {split_ms:.1f} ms")
+    batched_tokens = [
+        item.batched_tokens for item in results if item.batched_tokens is not None
+    ]
+    split_tokens = [
+        item.split_tokens for item in results if item.split_tokens is not None
+    ]
+    if batched_tokens:
+        typer.echo(f"batched トークン合計: {sum(batched_tokens)}")
+    if split_tokens:
+        typer.echo(f"split トークン合計: {sum(split_tokens)}")
+    typer.echo(f"測定: {path}")
 
 
 def main() -> None:

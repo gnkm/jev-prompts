@@ -126,6 +126,13 @@ def probe_model_version(client: OpenRouterClient) -> str:
     return model
 
 
+def _execution_error(value: Any) -> str | None:
+    err = getattr(value, "error", None)
+    if isinstance(err, str) and err:
+        return err
+    return None
+
+
 def _answer_key(value: Any) -> str:
     if hasattr(value, "answers"):
         raw = {
@@ -155,16 +162,58 @@ def check_determinism(
     *,
     sample_size: int = DETERMINISM_SAMPLE_SIZE,
 ) -> bool:
-    """同一入力を 2 回実行し、出力が一致するか。"""
+    """同一入力を 2 回実行し、出力が一致するか。失敗ログは決定的と見ない。"""
     sample = list(cases[:sample_size])
     if not sample:
         raise PreflightError("決定性確認のケースが無い")
     first = [execute(case, "A", record) for case, record in sample]
     second = [execute(case, "A", record) for case, record in sample]
+    failures = [
+        msg for item in (*first, *second) if (msg := _execution_error(item)) is not None
+    ]
+    if failures:
+        raise PreflightError(f"決定性確認の呼び出しが失敗した: {failures[0]}")
     return all(
         _answer_key(left) == _answer_key(right)
         for left, right in zip(first, second, strict=True)
     )
+
+
+def write_preflight_report(report: PreflightReport, path: Path) -> None:
+    """本ランが repeats を読めるよう、判定をローカルログへ残す。"""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "bodies": report.bodies,
+        "model": report.model,
+        "deterministic": report.deterministic,
+        "repeats": report.repeats,
+        "token_checks": [
+            {
+                "task": item.task,
+                "condition": item.condition,
+                "tokens": item.tokens,
+                "limit": item.limit,
+            }
+            for item in report.token_checks
+        ],
+    }
+    path.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
+
+
+def read_repeats(path: Path) -> int:
+    """preflight.json が無ければ 1 回。"""
+    if not path.is_file():
+        return 1
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+        repeats = int(raw["repeats"])
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        raise PreflightError(f"preflight 判定が読めない: {path}") from exc
+    if repeats < 1:
+        raise PreflightError("repeats は 1 以上")
+    return repeats
 
 
 def run_preflight(

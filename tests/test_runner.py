@@ -26,6 +26,7 @@ from jev_prompts.runners import (
     write_local_logs,
     write_published_records,
 )
+from jev_prompts.runners.execute import repeating_execute
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 HASH_A = "a" * 64
@@ -261,3 +262,19 @@ def test_readme_describes_case_nested_runner() -> None:
     assert "ケースごとに全条件" in readme
     assert "PublishedRecord" in readme
     assert "data/logs/" in readme
+
+
+def test_repeating_execute_averages_numeric_answers() -> None:
+    case = CASES[0]
+    seen = {"n": 0}
+
+    def execute(_case: RunCase, _condition: str) -> RequestLog:
+        seen["n"] += 1
+        score = float(seen["n"])
+        return _log(_case, _condition, answer=score, confidence=score / 10)
+
+    wrapped = repeating_execute(execute, repeats=3)
+    log = wrapped(case, "A")
+    assert seen["n"] == 3
+    assert log.answer == pytest.approx(2.0)
+    assert log.confidence == pytest.approx(0.2)

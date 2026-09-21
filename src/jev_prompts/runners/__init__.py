@@ -17,6 +17,7 @@ from jev_prompts.runners.fanout import (
     agreement,
     iter_fanout_calls,
     run_fanout,
+    write_fanout_results,
 )
 from jev_prompts.runners.payload import (
     MissingBodyError,
@@ -32,8 +33,10 @@ from jev_prompts.runners.preflight import (
     check_determinism,
     check_token_limits,
     estimate_tokens,
+    read_repeats,
     require_api_key,
     run_preflight,
+    write_preflight_report,
 )
 from jev_prompts.runners.schema import (
     PUBLISHED_COLUMNS,
@@ -76,12 +79,15 @@ __all__ = [
     "published_frame",
     "read_local_logs",
     "read_published_records",
+    "read_repeats",
     "require_api_key",
     "require_bodies",
     "run_experiment",
     "run_fanout",
     "run_preflight",
     "to_published",
+    "write_fanout_results",
     "write_local_logs",
+    "write_preflight_report",
     "write_published_records",
 ]
