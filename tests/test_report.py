@@ -264,3 +264,10 @@ def test_checked_in_results_omit_forbidden_tokens() -> None:
         text = path.read_bytes().decode("utf-8", errors="ignore")
         for token in FORBIDDEN_TOKENS:
             assert token not in text, f"{path}: {token}"
+
+
+def test_biome_skips_generated_figures() -> None:
+    text = (REPO_ROOT / "biome.json").read_text(encoding="utf-8")
+    assert "!results/figures" in text
+    readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
+    assert "biome ci" in readme

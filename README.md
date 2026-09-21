@@ -38,6 +38,7 @@ uv run ruff format --check .
 uv run lint-imports
 uv run python scripts/check_complexity.py
 uv run reuse lint
+pnpm exec biome ci .
 ```
 
 ## CLI

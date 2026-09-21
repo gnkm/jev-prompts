@@ -8,6 +8,7 @@ SPDX-License-Identifier: CC-BY-4.0
 
 `results/` に置くのは測定値と、そこから作った markdown / 図だけである。入力本文は置かない。
 公開行（`PublishedRecord`）に入力本文のフィールドは無い。再集計用のフルログは `data/logs/` に置き、このディレクトリにはコピーしない。
+`figures/` の SVG は matplotlib の生成物であり、Biome の対象外である。
 
 `python -m jev_prompts report`（または `scripts/write_report.py`）が `published.jsonl` を読み、`report.md` と `figures/` を書く。中身は指標マトリクス、較正（表と reliability diagram）、コスト × 精度（表と散布図）である。生成 markdown から図ファイルへリンクする。Web UI は無い。
 
