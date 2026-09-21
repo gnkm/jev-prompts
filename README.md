@@ -9,7 +9,7 @@ Jev に 3 つの課題を与え、精度の評価をおこなう。
 図が必要な箇所は画像を生成してそのファイルから参照する。Web UI は提供しない。
 表の処理は Polars を使う。
 
-Python パッケージ `jev_prompts` の骨格（uv / pytest / Ruff / Typer / Polars）と、ケースネストの実験ランナーがある。集計・検定の本実装は後続。
+Python パッケージ `jev_prompts` の骨格（uv / pytest / Ruff / Typer / Polars）と、ケースネストの実験ランナー、指標の Polars 集計がある。検定（McNemar / ブートストラップ / Holm）の本実装は後続。
 パッケージは `report → stats → metrics → runners → prompts → clients → data → config` の一方向レイヤで、Import Linter が逆向きの import を止める。
 複雑度は Radon が測り、Xenon が `pyproject.toml` の閾値で CI を落とす。緩める変更は CODEOWNERS 対象。
 ケース台帳は `case_id` / split / gold / content_hash / 抽出シードを Polars で扱う。本文は同梱しない。
@@ -68,6 +68,20 @@ uv run reuse lint
 - 公開用の `PublishedRecord` は本文キーを持たない。`content_hash` と測定値だけを `results/` に置く。
 
 ライブ API は既定の CI に載せない。ランナーのユニットテストは execute を差し込み、実行順とスキーマだけを固定する。
+
+## 評価指標
+
+`jev_prompts.metrics.aggregate_metrics` が RequestLog / PublishedRecord の Polars 表を `task` / `condition` / `split` ごとに集計する。API は呼ばない。
+
+| タイプ | 主指標 |
+| --- | --- |
+| Choice | top-1 精度 |
+| Score | gold 段階との MAE（`score` は丸めない）と Spearman 相関 |
+| Noul | AUC（反転補正しない。0.5 未満ならそのまま記録する） |
+
+全タイプ共通の 4 指標は confident 誤答率、ECE（confidence を 10 ビン）、1,000 件あたりトークン、レイテンシ p50 / p95。Noul の confident 誤答は `noul` ≤ 0.1 または ≥ 0.9 かつ不正解。パース失敗は不正解とし、失敗率（`error_rate`）と主指標の対象件数（`n_primary`）を併記する。Noul の予測値と confidence は有限な 0〜1 でなければ集計しない。
+
+合格ライン（例: Choice で A が B1 に対し top-1 +5pt）はコードのアサーションにしない。レポートの判定欄で使う。既知の RequestLog フィクスチャで数値が手計算と一致することをテストする。
 
 ## データ
 
