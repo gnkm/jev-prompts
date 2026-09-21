@@ -255,3 +255,47 @@ def test_stats_source_does_not_use_two_sample_tests() -> None:
     assert "mannwhitney" not in lowered
     assert "welch" not in lowered
     assert "independent" not in lowered or "独立 2 標本は使わない" in text
+
+
+def test_invalid_bootstrap_args_raise() -> None:
+    logs = local_frame(_choice_ab1())
+    with pytest.raises(StatsError, match="n_bootstrap"):
+        compare_paired(logs, n_bootstrap=0)
+    with pytest.raises(StatsError, match="n_bootstrap"):
+        compare_paired(logs, n_bootstrap=-1)
+    with pytest.raises(StatsError, match="ci_level"):
+        compare_paired(logs, n_bootstrap=10, ci_level=1.5)
+    with pytest.raises(StatsError, match="ci_level"):
+        compare_paired(logs, n_bootstrap=10, ci_level=0.0)
+
+
+def test_n_bootstrap_counts_defined_replicates() -> None:
+    logs: list[RequestLog] = []
+    golds = ("spam", "ham", "ham", "ham")
+    for i, gold in enumerate(golds):
+        cid = f"u{i}"
+        pred_pos = gold == "spam"
+        logs.append(
+            _log(
+                case_id=cid,
+                task="noul",
+                gold=gold,
+                answer=0.8 if pred_pos else 0.2,
+                condition="A",
+            )
+        )
+        logs.append(
+            _log(
+                case_id=cid,
+                task="noul",
+                gold=gold,
+                answer=0.7 if pred_pos else 0.3,
+                condition="B1",
+            )
+        )
+    requested = 200
+    frame = compare_paired(local_frame(logs), n_bootstrap=requested)
+    auc = _row(frame, metric="auc")
+    acc = _row(frame, metric="accuracy")
+    assert acc["n_bootstrap"] == requested
+    assert 0 < int(auc["n_bootstrap"]) < requested

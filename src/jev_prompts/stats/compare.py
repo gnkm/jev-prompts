@@ -72,6 +72,7 @@ def compare_paired(
     seed: int = STATS_SEED,
 ) -> pl.DataFrame:
     """同一 case_id で baseline 対その他を比べる。p 値だけでは返さない。"""
+    _require_interval_args(n_bootstrap, ci_level)
     prepared = _prepare_or_raise(logs)
     if prepared.height == 0:
         return _empty()
@@ -92,6 +93,13 @@ def compare_paired(
     if not rows:
         return _empty()
     return _attach_holm(pl.DataFrame(rows)).select(list(COMPARE_COLUMNS))
+
+
+def _require_interval_args(n_bootstrap: int, ci_level: float) -> None:
+    if not isinstance(n_bootstrap, int) or n_bootstrap <= 0:
+        raise StatsError("n_bootstrap は正の整数である")
+    if not 0.0 < ci_level < 1.0:
+        raise StatsError("ci_level は 0 より大きく 1 より小さい")
 
 
 def _prepare_or_raise(logs: pl.DataFrame) -> pl.DataFrame:
@@ -267,7 +275,7 @@ def _one_metric(
         "n_discordant": n_disc,
         "n_baseline_only": n_base,
         "n_other_only": n_oth,
-        "n_bootstrap": n_bootstrap,
+        "n_bootstrap": len(diffs),
     }
 
 
