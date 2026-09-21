@@ -1,11 +1,15 @@
 # Jev プロンプト実験
 
+![CI](https://github.com/gnkm/jev-prompts/actions/workflows/ci.yml/badge.svg)
+
 Jev に 3 つの課題を与え、精度の評価をおこなう。
 課題解決にあたって、Jev にはいくつかのプロンプトを与え、プロンプトの効果を評価できるようにする。
 
 成果物は CLI（Typer）と `results/` の markdown レポートである。結果の把握は markdown を読む。
 図が必要な箇所は画像を生成してそのファイルから参照する。Web UI は提供しない。
 表の処理は Polars を使う。
+
+実験コードは未実装、CI は整形のみ。Python のランナーやテストはまだ無く、GitHub Actions は Biome（`pnpm exec biome ci .`）だけを `main` と pull request で実行する。
 
 ## 比較用 LLM
 
