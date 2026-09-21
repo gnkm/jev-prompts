@@ -6,9 +6,13 @@
 
 from __future__ import annotations
 
+import json
+from collections import defaultdict
+from collections.abc import Mapping
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Any
 
+import polars as pl
 import typer
 
 from jev_prompts.clients import MissingApiKeyError, OpenRouterClient
@@ -23,8 +27,19 @@ from jev_prompts.config import (
     SONNET_MODEL_ID,
 )
 from jev_prompts.data.fetch import FetchError, fetch_and_verify
-from jev_prompts.runners.experiment import run_experiment
-from jev_prompts.runners.fanout import FanoutError, run_fanout, write_fanout_results
+from jev_prompts.prompts.catalog import load_bundle
+from jev_prompts.runners.execute import (
+    execute_for_experiment,
+    execute_for_fanout,
+    repeating_execute,
+)
+from jev_prompts.runners.experiment import RunCase, run_experiment
+from jev_prompts.runners.fanout import (
+    FanoutComparison,
+    compare_fanout,
+    run_fanout_pair,
+    write_fanout_logs,
+)
 from jev_prompts.runners.payload import MissingBodyError, load_run_cases
 from jev_prompts.runners.preflight import (
     PreflightError,
@@ -33,7 +48,12 @@ from jev_prompts.runners.preflight import (
     run_preflight,
     write_preflight_report,
 )
-from jev_prompts.runners.schema import write_local_logs, write_published_records
+from jev_prompts.runners.schema import (
+    LogSchemaError,
+    RequestLog,
+    write_local_logs,
+    write_published_records,
+)
 
 APP_HELP = f"""Jev プロンプト実験の CLI。
 
@@ -54,6 +74,21 @@ app = typer.Typer(
 
 RawDir = Annotated[Path, typer.Option("--raw-dir", help="配布元の展開先")]
 CasesDir = Annotated[Path, typer.Option("--cases-dir", help="ケース台帳のディレクトリ")]
+LogsDir = Annotated[
+    Path, typer.Option("--logs-dir", "--log-dir", help="ローカルログの書き出し先")
+]
+
+_MOCK_QUESTIONS = {
+    "intent": {"type": "choice", "instructions": "intent?"},
+    "dept": {"type": "choice", "instructions": "dept?"},
+}
+_MOCK_CASE = RunCase(
+    case_id="choice:mock",
+    task="choice",
+    split="test",
+    gold="ham",
+    content_hash="a" * 64,
+)
 
 
 def _fail(message: str) -> None:
@@ -86,9 +121,7 @@ def fetch_command(
 def preflight_command(
     raw_dir: RawDir = RAW_DIR,
     cases_dir: CasesDir = CASES_DIR,
-    logs_dir: Annotated[
-        Path, typer.Option("--logs-dir", help="判定の書き出し先")
-    ] = LOCAL_LOGS_DIR,
+    logs_dir: LogsDir = LOCAL_LOGS_DIR,
 ) -> None:
     """実行前: 決定性・トークン・モデル版を確認する。本文とキーが要る。"""
     _guard_execution()
@@ -114,9 +147,7 @@ def preflight_command(
 def run_command(
     raw_dir: RawDir = RAW_DIR,
     cases_dir: CasesDir = CASES_DIR,
-    logs_dir: Annotated[
-        Path, typer.Option("--logs-dir", help="再集計用ローカルログ")
-    ] = LOCAL_LOGS_DIR,
+    logs_dir: LogsDir = LOCAL_LOGS_DIR,
     results_dir: Annotated[
         Path, typer.Option("--results-dir", help="公開用 results")
     ] = RESULTS_DIR,
@@ -127,10 +158,9 @@ def run_command(
         pairs = load_run_cases(raw_dir, cases_dir)
     except (MissingBodyError, FetchError) as exc:
         _fail(str(exc))
-    from jev_prompts.runners.execute import execute_for_experiment, repeating_execute
-
+    case_ids = [case.case_id for case, _record in pairs]
     try:
-        repeats = read_repeats(logs_dir / "preflight.json")
+        repeats = read_repeats(logs_dir / "preflight.json", case_ids=case_ids)
     except PreflightError as exc:
         _fail(str(exc))
     cases = [case for case, _record in pairs]
@@ -147,48 +177,126 @@ def run_command(
     typer.echo(f"公開行: {results_dir / 'published.jsonl'}")
 
 
+def _mock_fanout_execute(
+    case: RunCase, questions: Mapping[str, Mapping[str, Any]]
+) -> RequestLog:
+    qids = list(questions)
+    if len(qids) == 1:
+        answer: str | dict[str, str] = f"ans-{qids[0]}"
+    else:
+        answer = {qid: f"ans-{qid}" for qid in qids}
+    n = len(questions)
+    return RequestLog(
+        case_id=case.case_id,
+        task=case.task,
+        condition="A",
+        split=case.split,
+        probabilities={"ham": 0.7, "spam": 0.3},
+        gold=case.gold,
+        content_hash=case.content_hash,
+        question_json=dict(questions),
+        answer=answer if isinstance(answer, str) else json.dumps(answer),
+        usage_tokens=10 if n > 1 else 8,
+        latency_ms=5.0 if n > 1 else 4.0,
+    )
+
+
+def _usage_label(frame: pl.DataFrame, complete_total: int) -> str:
+    if "usage_tokens" not in frame.columns:
+        return "欠損あり"
+    values = frame["usage_tokens"].to_list()
+    if not values or any(item is None for item in values):
+        return "欠損あり"
+    return str(complete_total)
+
+
+def _echo_fanout(
+    comparison: FanoutComparison,
+    batched: pl.DataFrame,
+    split: pl.DataFrame,
+    batched_path: Path,
+    split_path: Path,
+) -> None:
+    typer.echo(f"batched: {batched_path}")
+    typer.echo(f"split: {split_path}")
+    typer.echo(
+        "tokens "
+        f"{_usage_label(batched, comparison.batched_usage_tokens)} vs "
+        f"{_usage_label(split, comparison.split_usage_tokens)}; "
+        "latency_ms "
+        f"{comparison.batched_latency_ms} vs {comparison.split_latency_ms}; "
+        f"match_rate {comparison.match_rate} "
+        f"({comparison.matched}/{comparison.compared})"
+    )
+
+
+def _task_questions(task: str) -> dict[str, dict[str, Any]]:
+    bundle = load_bundle(task, "A")
+    if bundle.questions is None:
+        raise LogSchemaError(f"{task}/A に questions が無い")
+    return {str(qid): dict(item) for qid, item in bundle.questions.items()}
+
+
+def _live_fanout(raw_dir: Path, cases_dir: Path, logs_dir: Path) -> None:
+    pairs = load_run_cases(raw_dir, cases_dir)
+    grouped: dict[str, list[tuple[RunCase, dict[str, Any]]]] = defaultdict(list)
+    for case, record in pairs:
+        grouped[case.task].append((case, record))
+    batched_parts: list[pl.DataFrame] = []
+    split_parts: list[pl.DataFrame] = []
+    with OpenRouterClient() as client:
+        for task, items in grouped.items():
+            questions = _task_questions(task)
+            cases = [case for case, _record in items]
+            records = {case.case_id: record for case, record in items}
+            batched, split, comparison, _b, _s = run_fanout_pair(
+                cases, questions, execute_for_fanout(client, records)
+            )
+            batched_parts.append(batched)
+            split_parts.append(split)
+            typer.echo(
+                f"{task}: match_rate {comparison.match_rate} "
+                f"({comparison.matched}/{comparison.compared})"
+            )
+    batched = pl.concat(batched_parts)
+    split = pl.concat(split_parts)
+    batched_path, split_path = write_fanout_logs(batched, split, logs_dir)
+    n_questions = max((part.height for part in split_parts), default=0)
+    comparison = compare_fanout(batched, split, n_questions=n_questions)
+    _echo_fanout(comparison, batched, split, batched_path, split_path)
+
+
 @app.command("fanout")
 def fanout_command(
     raw_dir: RawDir = RAW_DIR,
     cases_dir: CasesDir = CASES_DIR,
-    logs_dir: Annotated[
-        Path, typer.Option("--logs-dir", help="fan-out 測定の書き出し先")
-    ] = LOCAL_LOGS_DIR,
+    logs_dir: LogsDir = LOCAL_LOGS_DIR,
+    mock: Annotated[
+        bool,
+        typer.Option(help="ライブ API を使わずモックで 2 経路のログを書く"),
+    ] = False,
 ) -> None:
     """fan-out 別ラン: A の質問を 1 回にまとめる / 分割する。精度比較には入れない。"""
+    if mock:
+        batched, split, comparison, batched_path, split_path = run_fanout_pair(
+            (_MOCK_CASE,),
+            _MOCK_QUESTIONS,
+            _mock_fanout_execute,
+            log_dir=logs_dir,
+        )
+        assert batched_path is not None and split_path is not None
+        _echo_fanout(comparison, batched, split, batched_path, split_path)
+        return
     _guard_execution()
     try:
-        pairs = load_run_cases(raw_dir, cases_dir)
-        with OpenRouterClient() as client:
-            results = run_fanout(client, pairs)
+        _live_fanout(raw_dir, cases_dir, logs_dir)
     except (
         MissingApiKeyError,
         MissingBodyError,
         FetchError,
-        FanoutError,
+        LogSchemaError,
     ) as exc:
         _fail(str(exc))
-    path = logs_dir / "fanout.jsonl"
-    write_fanout_results(results, path)
-    agreed = sum(item.agreed for item in results)
-    compared = sum(item.compared for item in results)
-    batched_ms = sum(item.batched_ms for item in results)
-    split_ms = sum(item.split_ms for item in results)
-    typer.echo(f"fan-out {len(results)} ケース")
-    typer.echo(f"答えの一致: {agreed} / {compared}")
-    typer.echo(f"batched 遅延合計: {batched_ms:.1f} ms")
-    typer.echo(f"split 遅延合計: {split_ms:.1f} ms")
-    batched_tokens = [
-        item.batched_tokens for item in results if item.batched_tokens is not None
-    ]
-    split_tokens = [
-        item.split_tokens for item in results if item.split_tokens is not None
-    ]
-    if batched_tokens:
-        typer.echo(f"batched トークン合計: {sum(batched_tokens)}")
-    if split_tokens:
-        typer.echo(f"split トークン合計: {sum(split_tokens)}")
-    typer.echo(f"測定: {path}")
 
 
 def main() -> None:

@@ -51,6 +51,7 @@ class PreflightReport:
     token_checks: tuple[TokenCheck, ...]
     deterministic: bool
     repeats: int
+    case_ids: tuple[str, ...] = ()
 
 
 def require_api_key() -> str:
@@ -187,6 +188,7 @@ def write_preflight_report(report: PreflightReport, path: Path) -> None:
         "model": report.model,
         "deterministic": report.deterministic,
         "repeats": report.repeats,
+        "case_ids": list(report.case_ids),
         "token_checks": [
             {
                 "task": item.task,
@@ -202,17 +204,29 @@ def write_preflight_report(report: PreflightReport, path: Path) -> None:
     )
 
 
-def read_repeats(path: Path) -> int:
-    """preflight.json が無ければ 1 回。"""
+def read_repeats(
+    path: Path,
+    *,
+    case_ids: Sequence[str] | None = None,
+) -> int:
+    """現在の本ランに対応する preflight 判定だけを返す。無ければ止める。"""
     if not path.is_file():
-        return 1
+        raise PreflightError(f"preflight 判定が無い: {path}")
     try:
         raw = json.loads(path.read_text(encoding="utf-8"))
         repeats = int(raw["repeats"])
+        stored_model = str(raw["model"])
+        stored_ids = tuple(str(item) for item in raw["case_ids"])
     except (OSError, ValueError, KeyError, TypeError) as exc:
         raise PreflightError(f"preflight 判定が読めない: {path}") from exc
     if repeats < 1:
         raise PreflightError("repeats は 1 以上")
+    if not stored_model.startswith(JEV_MODEL_ID):
+        raise PreflightError(
+            f"preflight のモデルが {JEV_MODEL_ID} 系ではない: {stored_model}"
+        )
+    if case_ids is not None and stored_ids != tuple(str(item) for item in case_ids):
+        raise PreflightError("preflight 判定のケースが本ランと一致しない")
     return repeats
 
 
@@ -254,4 +268,5 @@ def run_preflight(
         token_checks=token_checks,
         deterministic=deterministic,
         repeats=repeats,
+        case_ids=tuple(case.case_id for case, _record in cases),
     )

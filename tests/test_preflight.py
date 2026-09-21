@@ -126,7 +126,21 @@ def test_write_and_read_repeats(tmp_path: Path) -> None:
         token_checks=(),
         deterministic=False,
         repeats=3,
+        case_ids=("choice:c00",),
     )
     write_preflight_report(report, path)
-    assert read_repeats(path) == 3
-    assert read_repeats(tmp_path / "missing.json") == 1
+    assert read_repeats(path, case_ids=("choice:c00",)) == 3
+    with pytest.raises(PreflightError, match="無い"):
+        read_repeats(tmp_path / "missing.json")
+    with pytest.raises(PreflightError, match="ケース"):
+        read_repeats(path, case_ids=("choice:other",))
+
+
+def test_read_repeats_rejects_unrelated_model(tmp_path: Path) -> None:
+    path = tmp_path / "preflight.json"
+    path.write_text(
+        '{"repeats": 3, "model": "openai/gpt-5.6-luna", "case_ids": ["c"]}\n',
+        encoding="utf-8",
+    )
+    with pytest.raises(PreflightError, match="モデル"):
+        read_repeats(path)

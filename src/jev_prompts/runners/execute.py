@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import json
 import time
 from collections import Counter
 from collections.abc import Callable, Mapping, Sequence
@@ -203,6 +204,78 @@ def execute_for_experiment(
     return execute
 
 
+def _scalar_answer(answer: JevAnswer) -> str | float | None:
+    if answer.choice is not None:
+        return answer.choice
+    if answer.score is not None:
+        return answer.score
+    return answer.noul
+
+
+def _fanout_answer(result: JevResult) -> str | float | None:
+    items = list(result.answers.items())
+    if len(items) == 1:
+        return _scalar_answer(items[0][1])
+    return json.dumps(
+        {qid: _scalar_answer(item) for qid, item in items},
+        ensure_ascii=False,
+    )
+
+
+def execute_for_fanout(
+    client: OpenRouterClient,
+    records: Mapping[str, Mapping[str, Any]],
+    *,
+    prompts_root: Any = None,
+):
+    """`run_fanout_pair` に渡す execute。質問スライスをそのまま送る。"""
+
+    def execute(
+        case: RunCase, questions: Mapping[str, Mapping[str, Any]]
+    ) -> RequestLog:
+        record = records[case.case_id]
+        bundle = load_bundle(case.task, "A", root=prompts_root)
+        packed = {str(qid): dict(item) for qid, item in questions.items()}
+        started = time.perf_counter()
+        try:
+            if bundle.state is None:
+                raise ValueError(f"{case.task}/A に state が無い")
+            state = materialize_state(case.task, bundle.state, record)
+            result = client.system_one(state=state, questions=packed)
+            latency_ms = (time.perf_counter() - started) * 1000
+            primary = _primary_answer(result)
+            return RequestLog(
+                case_id=case.case_id,
+                task=case.task,
+                condition="A",
+                split=case.split,
+                probabilities=_probabilities(primary),
+                gold=case.gold,
+                content_hash=case.content_hash,
+                model=result.model,
+                provider=result.provider,
+                state_json=state,
+                question_json=packed,
+                answer=_fanout_answer(result),
+                confidence=primary.confidence,
+                usage_tokens=_usage_tokens(result.usage),
+                latency_ms=latency_ms,
+            )
+        except (OpenRouterError, ValueError) as exc:
+            return RequestLog.failed(
+                case_id=case.case_id,
+                task=case.task,
+                condition="A",
+                split=case.split,
+                gold=case.gold,
+                content_hash=case.content_hash,
+                error=f"{type(exc).__name__}: {exc}",
+                question_json=packed,
+            )
+
+    return execute
+
+
 def average_request_logs(logs: Sequence[RequestLog]) -> RequestLog:
     """非決定時の複数回実行を 1 行に平均する。失敗があれば失敗のまま返す。"""
     if not logs:
@@ -238,7 +311,11 @@ def average_request_logs(logs: Sequence[RequestLog]) -> RequestLog:
             return None
         return sum(values) / len(values)
 
-    usage = mean("usage_tokens")
+    usage_tokens = _sum_usage_tokens(logs)
+    routing = (
+        dict(first.routing_json) if isinstance(first.routing_json, Mapping) else {}
+    )
+    routing["repeats"] = n
     return RequestLog(
         case_id=first.case_id,
         task=first.task,
@@ -250,14 +327,25 @@ def average_request_logs(logs: Sequence[RequestLog]) -> RequestLog:
         model=first.model,
         provider=first.provider,
         request_id=first.request_id,
-        routing_json=first.routing_json,
+        routing_json=routing,
         state_json=first.state_json,
         question_json=first.question_json,
         answer=answer,
         confidence=mean("confidence"),
-        usage_tokens=None if usage is None else int(round(usage)),
+        usage_tokens=usage_tokens,
         latency_ms=mean("latency_ms"),
     )
+
+
+def _sum_usage_tokens(logs: Sequence[RequestLog]) -> int | None:
+    """コスト用。欠損があれば合計しない。精度用の平均とは分ける。"""
+    total = 0
+    for log in logs:
+        tokens = log.usage_tokens
+        if tokens is None or isinstance(tokens, bool) or not isinstance(tokens, int):
+            return None
+        total += tokens
+    return total
 
 
 def repeating_execute(

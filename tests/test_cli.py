@@ -99,6 +99,17 @@ def test_fanout_without_key_exits_nonzero(monkeypatch, tmp_path: Path) -> None:
     assert result.exit_code != 0
 
 
+def test_fanout_mock_without_key_writes_logs(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    result = runner.invoke(app, ["fanout", "--mock", "--logs-dir", str(tmp_path)])
+    assert result.exit_code == 0, result.stdout + result.stderr
+    assert (tmp_path / "fanout-batched.jsonl").is_file()
+    assert (tmp_path / "fanout-split.jsonl").is_file()
+    assert "batched:" in result.stdout
+    assert "tokens " in result.stdout
+    assert "欠損あり" not in result.stdout
+
+
 def test_run_without_bodies_exits_nonzero(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
     result = runner.invoke(

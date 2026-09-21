@@ -278,3 +278,6 @@ def test_repeating_execute_averages_numeric_answers() -> None:
     assert seen["n"] == 3
     assert log.answer == pytest.approx(2.0)
     assert log.confidence == pytest.approx(0.2)
+    assert log.usage_tokens == 36
+    assert log.routing_json is not None
+    assert log.routing_json["repeats"] == 3
