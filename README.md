@@ -55,7 +55,13 @@ CODEOWNERS は GitHub Team プラン以上が必要です。Free プランでは
 - .github/          # CODEOWNERS, Issue / PR テンプレート
 - .vscode/          # フォーマッタ等
 - AGENTS.md         # Cloud Agents 向けの作業ルール
+- ARCHITECTURE.md   # 評価条件と統計手法の位置づけ
+- docs/             # 解説（source-of-truth は読み取り専用）
 ```
+
+## 評価の統計
+
+同じケースを条件 A 対 B1 のように2条件で比べるときは、当たり外れの差に McNemar、指標の幅にブートストラップ、複数回の判定に Holm を使う。解説は [docs/statistical-methods.md](docs/statistical-methods.md)、位置づけは [ARCHITECTURE.md](ARCHITECTURE.md) の統計節。
 
 ## エージェントとの進め方
 
