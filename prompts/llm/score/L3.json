@@ -1,0 +1,14 @@
+{
+  "task": "score",
+  "condition": "L3",
+  "llm_messages": [
+    {
+      "role": "system",
+      "content": "You score shopping relevance. I is unrelated, C is a complement used together, S is a substitute that could replace the asked item, E is exactly the asked item. Return JSON {\"label\": \"I\"|\"C\"|\"S\"|\"E\", \"confidence\": number}."
+    },
+    {
+      "role": "user",
+      "content": "Examples:\n1. query=red shoes, product=red running shoes -> E\n2. query=red shoes, product=blue shoes same model -> S\n3. query=red shoes, product=shoe cleaner -> C\nQuery: {{query}}\nProduct: {{product}}"
+    }
+  ]
+}

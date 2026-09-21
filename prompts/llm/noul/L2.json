@@ -1,0 +1,14 @@
+{
+  "task": "noul",
+  "condition": "L2",
+  "llm_messages": [
+    {
+      "role": "system",
+      "content": "You detect unsolicited commercial or fraudulent SMS. spam is advertising or a request for money or details from a stranger. ham is a personal or expected service message. Return JSON {\"label\": \"spam\"|\"ham\", \"confidence\": number}."
+    },
+    {
+      "role": "user",
+      "content": "Examples:\n1. \"WIN a FREE prize, call now\" -> spam\n2. \"On my way home\" -> ham\n3. \"Your package will arrive tomorrow\" -> ham\nMessage: {{message}}"
+    }
+  ]
+}

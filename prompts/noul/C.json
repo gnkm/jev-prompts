@@ -1,0 +1,29 @@
+{
+  "task": "noul",
+  "condition": "C",
+  "state": {
+    "message": "",
+    "device": {
+      "os": "Android",
+      "model": "Pixel"
+    },
+    "received_at": "2026-01-12T09:41:00Z",
+    "prior_messages": [
+      "See you at 6",
+      "The package arrived",
+      "Can you call later?",
+      "Meeting moved to Thursday",
+      "Thanks for the update"
+    ]
+  },
+  "questions": {
+    "unsolicited": {
+      "type": "noul",
+      "instructions": "Is `message` an unsolicited commercial or fraudulent message, sent to the recipient without them asking for it?",
+      "criteria": {
+        "true": "Advertises, promotes, or tries to obtain money or details from a stranger",
+        "false": "A personal message, or a message from a service the recipient uses"
+      }
+    }
+  }
+}

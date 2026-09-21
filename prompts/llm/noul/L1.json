@@ -1,0 +1,10 @@
+{
+  "task": "noul",
+  "condition": "L1",
+  "llm_messages": [
+    {
+      "role": "user",
+      "content": "Is this SMS spam? Reply with JSON {\"label\": \"spam\"|\"ham\", \"confidence\": 0.0}.\nMessage: {{message}}"
+    }
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "task": "score",
+  "condition": "B2",
+  "state": {
+    "query": "",
+    "product": {
+      "title": "",
+      "description": ""
+    }
+  },
+  "questions": {
+    "relevance": {
+      "type": "score",
+      "instructions": "How well does `product` match what the shopper asked for in `query`?",
+      "criteria": [
+        "not relevant",
+        "slightly relevant",
+        "mostly relevant",
+        "highly relevant"
+      ]
+    }
+  }
+}

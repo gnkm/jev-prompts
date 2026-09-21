@@ -1,0 +1,13 @@
+{
+  "task": "noul",
+  "condition": "B1",
+  "state": {
+    "message": ""
+  },
+  "questions": {
+    "unsolicited": {
+      "type": "noul",
+      "instructions": "Check this message and decide whether there is a problem with it."
+    }
+  }
+}

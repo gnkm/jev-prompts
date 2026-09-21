@@ -1,0 +1,29 @@
+{
+  "task": "choice",
+  "condition": "A",
+  "state": {
+    "query": ""
+  },
+  "questions": {
+    "intent": {
+      "type": "choice",
+      "instructions": "Which intent best matches the customer's request in `query`?",
+      "criteria": {
+        "card_payment_fee_charged": {
+          "what": "A fee was added to a card payment the customer made",
+          "not_for": "Fees on cash withdrawals or on transfers",
+          "examples": [
+            "Why was I charged extra for paying by card?"
+          ]
+        },
+        "cash_withdrawal_charge": {
+          "what": "A fee was added to an ATM or cash withdrawal",
+          "not_for": "Fees on card purchases"
+        },
+        "other": {
+          "what": "None of the intents above"
+        }
+      }
+    }
+  }
+}

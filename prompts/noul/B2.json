@@ -1,0 +1,17 @@
+{
+  "task": "noul",
+  "condition": "B2",
+  "state": {
+    "message": ""
+  },
+  "questions": {
+    "unsolicited": {
+      "type": "noul",
+      "instructions": "Is `message` an unsolicited commercial or fraudulent message, sent to the recipient without them asking for it?",
+      "criteria": {
+        "true": "Unsolicited, and it asks the recipient to send money or personal details",
+        "false": "Not both unsolicited and a request for money or personal details"
+      }
+    }
+  }
+}
