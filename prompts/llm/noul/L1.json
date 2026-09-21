@@ -4,7 +4,7 @@
   "llm_messages": [
     {
       "role": "user",
-      "content": "Is this SMS spam? Reply with JSON {\"label\": \"spam\"|\"ham\", \"confidence\": 0.0}.\nMessage: {{message}}"
+      "content": "Is this SMS spam? Reply with JSON only matching {\"label\": \"spam\"|\"ham\", \"confidence\": number} with confidence between 0 and 1.\nMessage: {{message}}"
     }
   ]
 }

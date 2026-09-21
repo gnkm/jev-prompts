@@ -1,0 +1,16 @@
+{
+  "unit": "minutes",
+  "purpose": "Record time spent writing condition A and condition L2 so the effort can be compared. Leave null until a session logs the minutes.",
+  "choice": {
+    "A": null,
+    "L2": null
+  },
+  "score": {
+    "A": null,
+    "L2": null
+  },
+  "noul": {
+    "A": null,
+    "L2": null
+  }
+}

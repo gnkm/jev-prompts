@@ -160,3 +160,146 @@ def test_load_all_covers_three_tasks_and_eight_conditions() -> None:
     assert {(b.task, b.condition) for b in bundles} == {
         (task, condition) for task in TASKS for condition in CONDITIONS
     }
+
+
+BANKING77_LABELS: tuple[str, ...] = (
+    "card_arrival",
+    "card_linking",
+    "exchange_rate",
+    "card_payment_wrong_exchange_rate",
+    "extra_charge_on_statement",
+    "pending_cash_withdrawal",
+    "fiat_currency_support",
+    "card_delivery_estimate",
+    "automatic_top_up",
+    "card_not_working",
+    "exchange_via_app",
+    "lost_or_stolen_card",
+    "age_limit",
+    "pin_blocked",
+    "contactless_not_working",
+    "top_up_by_bank_transfer_charge",
+    "pending_top_up",
+    "cancel_transfer",
+    "top_up_limits",
+    "wrong_amount_of_cash_received",
+    "card_payment_fee_charged",
+    "transfer_not_received_by_recipient",
+    "supported_cards_and_currencies",
+    "getting_virtual_card",
+    "card_acceptance",
+    "top_up_reverted",
+    "balance_not_updated_after_cheque_or_cash_deposit",
+    "card_payment_not_recognised",
+    "edit_personal_details",
+    "why_verify_identity",
+    "unable_to_verify_identity",
+    "get_physical_card",
+    "visa_or_mastercard",
+    "topping_up_by_card",
+    "disposable_card_limits",
+    "compromised_card",
+    "atm_support",
+    "direct_debit_payment_not_recognised",
+    "passcode_forgotten",
+    "declined_cash_withdrawal",
+    "pending_card_payment",
+    "lost_or_stolen_phone",
+    "request_refund",
+    "declined_transfer",
+    "Refund_not_showing_up",
+    "declined_card_payment",
+    "pending_transfer",
+    "terminate_account",
+    "card_swallowed",
+    "transaction_charged_twice",
+    "verify_source_of_funds",
+    "transfer_timing",
+    "reverted_card_payment?",
+    "change_pin",
+    "beneficiary_not_allowed",
+    "transfer_fee_charged",
+    "receiving_money",
+    "failed_transfer",
+    "transfer_into_account",
+    "verify_top_up",
+    "getting_spare_card",
+    "top_up_by_cash_or_cheque",
+    "order_physical_card",
+    "virtual_card_not_working",
+    "wrong_exchange_rate_for_cash_withdrawal",
+    "get_disposable_virtual_card",
+    "top_up_failed",
+    "balance_not_updated_after_bank_transfer",
+    "cash_withdrawal_not_recognised",
+    "exchange_charge",
+    "top_up_by_card_charge",
+    "activate_my_card",
+    "cash_withdrawal_charge",
+    "card_about_to_expire",
+    "apple_pay_or_google_pay",
+    "verify_my_identity",
+    "country_support",
+)
+
+
+def test_choice_a_has_banking77_plus_other() -> None:
+    criteria = sole_question(load_bundle("choice", "A"))["criteria"]
+    assert set(criteria) == {*BANKING77_LABELS, "other"}
+    structured = criteria["card_payment_fee_charged"]
+    assert isinstance(structured, dict)
+    assert "what" in structured
+    assert "not_for" in structured
+    assert "examples" in structured
+    assert criteria["other"] == {"what": "None of the intents above"}
+
+
+@pytest.mark.parametrize("condition", ["B1", "B2"])
+def test_choice_question_conditions_keep_77_without_other(condition: str) -> None:
+    criteria = sole_question(load_bundle("choice", condition))["criteria"]
+    assert set(criteria) == set(BANKING77_LABELS)
+    assert "other" not in criteria
+
+
+def test_choice_b2_fee_intents_share_description() -> None:
+    criteria = sole_question(load_bundle("choice", "B2"))["criteria"]
+    for label in (
+        "card_payment_fee_charged",
+        "cash_withdrawal_charge",
+        "transfer_fee_charged",
+    ):
+        assert criteria[label] == "Fees and charges"
+
+
+def test_choice_c_state_is_large() -> None:
+    noisy = load_bundle("choice", "C").state
+    assert noisy is not None
+    assert len(json.dumps(noisy)) >= 6000
+    assert len(str(noisy["terms_of_service"])) >= 4000
+
+
+def test_l2_creation_time_field_exists() -> None:
+    path = PROMPTS_DIR / "creation_time.json"
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    assert raw["unit"] == "minutes"
+    for task in TASKS:
+        assert "L2" in raw[task]
+
+
+@pytest.mark.parametrize("condition", ["L1", "L2"])
+def test_choice_llm_lists_all_intents(condition: str) -> None:
+    messages = load_bundle("choice", condition).llm_messages
+    assert messages is not None
+    joined = "\n".join(str(item.get("content", "")) for item in messages)
+    for label in BANKING77_LABELS:
+        assert label in joined
+
+
+@pytest.mark.parametrize("task", TASKS)
+def test_l2_has_schema_and_three_examples(task: str) -> None:
+    messages = load_bundle(task, "L2").llm_messages
+    assert messages is not None
+    joined = "\n".join(str(item.get("content", "")) for item in messages)
+    assert '"label"' in joined
+    assert '"confidence"' in joined
+    assert joined.count("->") >= 3

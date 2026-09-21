@@ -15,8 +15,9 @@ SPDX-License-Identifier: CC0-1.0
 | --- | --- |
 | `choice/` `score/` `noul/` | 条件 A / B1 / B2 / B3 / C の `state` と `questions` |
 | `llm/<task>/` | 条件 L1 / L2 / L3 の `llm_messages` |
+| `creation_time.json` | 条件 A と L2 の作成時間（分）。未記入は `null` |
 
-各タイプ 1 問のフィクスチャである。BANKING77 の 77 意図など本編の中身は後続。
+Choice の A は BANKING77 の 77 意図に `other` を足す。混同しやすい意図だけ `what` / `not_for` / `examples` にし、残りは 1 行説明。B1 / B2 は 77 意図のみ（`other` なし）。Score と Noul は各 1 問の本編。
 
 A から動かす軸は 1 つだけにする。
 

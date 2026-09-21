@@ -5,9 +5,15 @@
     "query": "",
     "account": {
       "tier": "standard",
-      "opened": "2023-04-11"
+      "opened": "2023-04-11",
+      "recent_logins": [
+        "2026-01-08T07:41:12Z",
+        "2026-01-09T18:02:55Z",
+        "2026-01-10T08:12:00Z",
+        "2026-01-11T21:44:03Z"
+      ]
     },
-    "terms_of_service": "Standard account terms apply. Fees may be charged on payments and withdrawals according to the published schedule.",
+    "terms_of_service": "Standard Personal Account Terms (excerpt for evaluation noise). This text is not a live contract.\n\n1. The account is a stored-value account for personal use. Business activity, resale of access, and operating as a money transmitter for third parties are outside the permitted use.\n\n2. Eligibility. You must be old enough to hold an account in your country of residence, pass identity checks, and keep a reachable email and phone number. We may ask again for documents if risk signals change.\n\n3. Opening and refusal. We may refuse an application without giving a reason required by financial-crime law. If we open an account, we may still limit features until source-of-funds checks finish.\n\n4. Safeguards. Funds are safeguarded with partner institutions according to applicable e-money rules. Safeguarding is not a deposit guarantee scheme and does not make the balance a bank deposit unless a separate bank partner product says so.\n\n5. Cards. Physical and virtual cards remain our property. You must sign, activate, and keep the PIN secret. Contactless, magnetic stripe, and chip use may have different merchant and country limits.\n\n6. Card replacement. Worn, expiring, lost, stolen, or swallowed cards can be replaced. Delivery times vary by country and postal partner. A replacement may use a new PAN. Disposable virtual cards are one-time numbers and are not posted.\n\n7. Wallets. Adding a card to Apple Pay or Google Pay is optional and follows the wallet provider rules. Tokenised payments are still card payments under these terms.\n\n8. ATM cash. Cash withdrawals may incur a fee, a foreign-exchange margin, or both. Some ATMs charge their own operator fee which we do not control. If an ATM dispenses the wrong amount, report it promptly with the receipt.\n\n9. Transfers. Outbound transfers can be cancelled only while they are still pending in our system. Once released to the scheme, recall is best-effort and may fail. Recipients who do not receive funds must be distinguished from delays in your own inbound credit.\n\n10. Beneficiaries. We may block payees in sanctioned regions, high-risk categories, or after fraud reports. A blocked beneficiary is not a failed transfer of a permitted payee.\n\n11. Top-ups. You may add money by card, bank transfer, cash, or cheque where offered. Automatic top-up triggers when the balance falls below a threshold you set. Top-up limits can be daily, rolling, or lifetime. A verification charge may appear before a card top-up completes.\n\n12. Failed versus reversed top-ups. A failed top-up never credited the balance. A reverted top-up credited and was later taken back, often after a chargeback or suspected fraud.\n\n13. Fees. Fees may apply to card payments, ATM withdrawals, transfers, currency conversion, and some top-up rails. The fee schedule is published in the app. An extra statement line that is not in the schedule should be queried as an unrecognised charge.\n\n14. Foreign exchange. The displayed mid-market rate is indicative. The booked rate on a card payment, ATM withdrawal, or in-app conversion may include a margin. Weekend and offshore rates can differ.\n\n15. Direct debits and repeating payments. You authorise merchants separately. Unrecognised direct debits can be claimed under the scheme rules. Chargebacks on card purchases follow the card scheme, not the direct-debit scheme.\n\n16. Refunds. A merchant refund is not instant. It can take several business days after the merchant posts it. Requesting a new refund is different from chasing a refund already issued.\n\n17. Pending authorisations. Card holds reduce available funds before settlement. Pending ATM withdrawals and pending transfers are separate states. A pending item that never settles should drop off; remaining holds should be reported.\n\n18. Declines. We may decline a card payment, ATM withdrawal, or transfer for insufficient funds, suspected fraud, merchant category blocks, or scheme errors. A decline is not a settled charge.\n\n19. Duplicate charges. If the same merchant reference posts twice, one entry may drop after clearing. Keep receipts until the statement confirms a single amount.\n\n20. Identity. We may ask you to verify identity, explain source of funds, or confirm a top-up. Refusing required checks can freeze outbound payments. Completing a check is not the same as asking why the check exists.\n\n21. Security. Lost phones, stolen cards, and leaked PANs are different incidents. Freeze the app from another device if the phone is gone. Report a missing card even if you later find it.\n\n22. PIN and passcode. Too many wrong PIN tries can block the chip. An app passcode is not the card PIN. Reset paths differ and may require identity checks.\n\n23. Countries. Availability of accounts, cards, ATM cash, and local rails depends on residence and travel location. Some features are off in listed countries.\n\n24. Age and additional cards. Younger users may have reduced features. A spare card for another person on the same account, if offered, remains your responsibility.\n\n25. Closing. You may request account termination after settling negative balances and destroying cards. We may also close an account for risk, inactivity, or legal duty. Remaining funds are returned to a named account in your name where law allows.\n\n26. Statements and notices. We send notices to the email on file. You must keep personal details current. Support hours in the app are not a promise of 24-hour human coverage.\n\n27. Liability. Unauthorised payments reported quickly may be refunded under applicable rules. Gross negligence, sharing PINs, or delayed reporting can reduce that protection. ATM operator faults are handled with the operator.\n\n28. Changes. We may change fees, limits, and these terms with notice in the app. Continued use after the effective date is acceptance except where local law requires an opt-in.\n\n29. Complaints. Start with in-app support. If unresolved, you may escalate to the named ombudsman or regulator for your residence. Escalation does not freeze fraud-prevention holds.\n\n30. Language. If translations differ, the English excerpt is for this evaluation only and is not the governing legal text of a live product.\n\nAppendix A. Example fee names that may appear: card payment fee, ATM fee, transfer fee, FX conversion fee, card top-up fee, bank-transfer top-up fee. Names on a live statement may differ.\n\nAppendix B. Example timelines. Card post 5-10 working days inland, longer overseas. Bank transfers may show as pending the same day and credit the recipient later. Merchant refunds often 3-10 working days after the merchant action.\n\nAppendix C. Records. We keep logs of logins, device changes, failed PIN tries, and support chats for security and complaints. Login history in the app may be incomplete for old devices.\n\nAppendix D. Third parties. Card schemes, ATM owners, correspondent banks, wallet providers, and postal carriers have their own terms. Failures at those parties can look like failures in the app.\n\nAppendix E. Prohibited activity includes fraud, sanctioned counterparties, and abuse of chargebacks. We may share information with schemes and law enforcement as required.\n\nAppendix F. Virtual cards. Reusable virtual cards keep a stable number until replaced. Disposable virtual cards rotate. Limits on disposable cards are separate from the physical card limit.\n\nAppendix G. Support. Written support may quote these sections. Quoting a section does not decide a specific dispute about a fee, decline, or missing transfer.\n\nAppendix noise 01. Operational note for agents: unused product flags, legacy BIN ranges, weekend FX windows, and postal exception codes are stored for audit and are not required to classify a customer's latest message. This paragraph exists to enlarge state for the context-rot condition.\n\nAppendix noise 02. Operational note for agents: unused product flags, legacy BIN ranges, weekend FX windows, and postal exception codes are stored for audit and are not required to classify a customer's latest message. This paragraph exists to enlarge state for the context-rot condition.",
     "support_hours": "Mon-Fri 9:00-18:00 GMT"
   },
   "questions": {
@@ -15,15 +21,161 @@
       "type": "choice",
       "instructions": "Which intent best matches the customer's request in `query`?",
       "criteria": {
+        "card_arrival": {
+          "what": "The customer is waiting for a physical card that was already ordered and asks if it has arrived or where it is",
+          "not_for": "Asking how long delivery usually takes before or without tracking a specific order",
+          "examples": ["My new card still has not shown up"]
+        },
+        "card_linking": "The customer wants to attach an existing physical or virtual card to the app or account",
+        "exchange_rate": "The customer wants the current foreign-exchange rate, not a fee already charged",
+        "card_payment_wrong_exchange_rate": "A completed card purchase used a worse exchange rate than the customer expected",
+        "extra_charge_on_statement": "An unexplained extra line appears on the statement and is not identified as a known fee type",
+        "pending_cash_withdrawal": {
+          "what": "An ATM or cash withdrawal is still pending",
+          "not_for": "A pending card purchase or pending transfer",
+          "examples": ["My ATM withdrawal is still pending"]
+        },
+        "fiat_currency_support": "The customer asks which government-issued currencies the product supports",
+        "card_delivery_estimate": {
+          "what": "The customer wants the usual or promised delivery time for a card, not the status of a specific shipment",
+          "not_for": "Chasing a card that should already have arrived",
+          "examples": ["How many days does a new card usually take to arrive?"]
+        },
+        "automatic_top_up": "The customer wants to set, change, or stop automatic top-ups when the balance is low",
+        "card_not_working": "The card fails in general use and the cause is not a specific decline, ATM swallow, or contactless fault",
+        "exchange_via_app": "The customer wants to convert currency inside the app",
+        "lost_or_stolen_card": {
+          "what": "The physical card is missing, stolen, or the customer cannot find it and needs it blocked or replaced",
+          "not_for": "Fraud on a card the customer still has, or a phone that was lost",
+          "examples": ["I think someone stole my card"]
+        },
+        "age_limit": "The customer asks the minimum age to open or use the account or card",
+        "pin_blocked": "The PIN is locked after wrong attempts and the customer cannot use it",
+        "contactless_not_working": "Contactless tap-to-pay fails while other card uses may still work",
+        "top_up_by_bank_transfer_charge": "A fee was added when topping up by bank transfer",
+        "pending_top_up": "A top-up is still processing and has not credited yet",
+        "cancel_transfer": "The customer wants to stop an outbound transfer that has not finished",
+        "top_up_limits": "The customer asks how much they can top up, or has hit a top-up cap",
+        "wrong_amount_of_cash_received": "The ATM dispensed a different amount of cash than was charged",
         "card_payment_fee_charged": {
           "what": "A fee was added to a card payment the customer made",
-          "not_for": "Fees on cash withdrawals or on transfers",
+          "not_for": "Fees on cash withdrawals, bank transfers, or top-ups",
           "examples": ["Why was I charged extra for paying by card?"]
         },
+        "transfer_not_received_by_recipient": {
+          "what": "The customer sent money and the recipient says it never arrived",
+          "not_for": "The sender's own balance not updating after an inbound transfer",
+          "examples": ["The person I paid did not get the money"]
+        },
+        "supported_cards_and_currencies": "The customer asks which card schemes or currencies can be used",
+        "getting_virtual_card": "The customer wants a reusable virtual card number, not a disposable one and not a physical card",
+        "card_acceptance": "The customer asks where the card can be used, or a merchant will not take it",
+        "top_up_reverted": {
+          "what": "A top-up that had succeeded was later undone and the money taken back",
+          "not_for": "A top-up that never completed in the first place",
+          "examples": ["You reversed a top-up that had already landed"]
+        },
+        "balance_not_updated_after_cheque_or_cash_deposit": "A cheque or cash deposit has not appeared on the balance",
+        "card_payment_not_recognised": "A card purchase the customer does not recognise appears on the account",
+        "edit_personal_details": "The customer wants to change name, address, email, or other profile data",
+        "why_verify_identity": {
+          "what": "The customer asks why the bank is requesting identity checks",
+          "not_for": "Wanting to start or finish the verification steps",
+          "examples": ["Why do you need my passport?"]
+        },
+        "unable_to_verify_identity": "Identity verification was attempted and failed or cannot be completed",
+        "get_physical_card": "The customer asks how to obtain a physical card they do not yet have, including first-time issue",
+        "visa_or_mastercard": "The customer asks whether the card is Visa or Mastercard, or wants a specific scheme",
+        "topping_up_by_card": "The customer wants to add money using a debit or credit card",
+        "disposable_card_limits": "The customer asks spending or count limits that apply to disposable virtual cards",
+        "compromised_card": {
+          "what": "The customer still has the card but suspects the details were stolen or used without permission",
+          "not_for": "A card that is physically lost or stolen",
+          "examples": ["Someone knows my card number and used it"]
+        },
+        "atm_support": "The customer asks which ATMs work, or whether cash withdrawal is supported",
+        "direct_debit_payment_not_recognised": "A direct debit the customer does not recognise was taken",
+        "passcode_forgotten": "The customer cannot remember the app passcode or login code",
+        "declined_cash_withdrawal": {
+          "what": "An ATM or cash withdrawal was declined",
+          "not_for": "A declined card purchase or declined transfer",
+          "examples": ["The ATM refused my withdrawal"]
+        },
+        "pending_card_payment": {
+          "what": "A card purchase is still pending and has not settled",
+          "not_for": "A pending ATM withdrawal or a pending outbound transfer",
+          "examples": ["Why is this card purchase still pending?"]
+        },
+        "lost_or_stolen_phone": "The phone used with the app was lost or stolen, not the payment card",
+        "request_refund": {
+          "what": "The customer wants the bank to start a refund or chargeback",
+          "not_for": "A refund that was already promised but has not appeared",
+          "examples": ["Please refund this payment"]
+        },
+        "declined_transfer": "An outbound transfer was refused",
+        "Refund_not_showing_up": {
+          "what": "A refund the customer expects is missing from the balance or statement",
+          "not_for": "Asking to start a new refund",
+          "examples": ["The merchant refunded me but I do not see it"]
+        },
+        "declined_card_payment": {
+          "what": "A card purchase was declined at a merchant",
+          "not_for": "A declined ATM withdrawal or a declined transfer",
+          "examples": ["My card was declined in a shop"]
+        },
+        "pending_transfer": "An outbound transfer is still processing",
+        "terminate_account": "The customer wants to close the account permanently",
+        "card_swallowed": "An ATM kept or captured the physical card",
+        "transaction_charged_twice": "The same payment appears more than once",
+        "verify_source_of_funds": "The bank asked where the customer's money came from and the customer is responding to that check",
+        "transfer_timing": "The customer asks how long a transfer takes in general, not about one missing payment",
+        "reverted_card_payment?": "A card payment that had gone through was later reversed",
+        "change_pin": "The customer wants to set or replace the card PIN, and the PIN is not blocked",
+        "beneficiary_not_allowed": "The payee is blocked or not permitted for transfers",
+        "transfer_fee_charged": {
+          "what": "A fee was added when the customer sent money to someone",
+          "not_for": "Fees on card purchases or ATM withdrawals",
+          "examples": ["Why did sending money cost extra?"]
+        },
+        "receiving_money": "The customer wants to know how others can pay them, or is expecting inbound funds",
+        "failed_transfer": "An outbound transfer did not complete",
+        "transfer_into_account": "The customer wants to move money into this account from another of their accounts",
+        "verify_top_up": "The customer must confirm a top-up (for example a verification charge) before it completes",
+        "getting_spare_card": "The customer wants an extra physical card on the same account, such as for a partner",
+        "top_up_by_cash_or_cheque": "The customer wants to add money with cash or a cheque",
+        "order_physical_card": "The customer wants to place an order for a physical card, including a replacement order",
+        "virtual_card_not_working": "A virtual card number is failing in use",
+        "wrong_exchange_rate_for_cash_withdrawal": "An ATM withdrawal used a worse exchange rate than expected",
+        "get_disposable_virtual_card": "The customer wants a single-use virtual card, not a reusable virtual card",
+        "top_up_failed": {
+          "what": "A top-up attempt did not complete and the money was not added",
+          "not_for": "A top-up that completed and was later reversed",
+          "examples": ["My top-up did not go through"]
+        },
+        "balance_not_updated_after_bank_transfer": {
+          "what": "An inbound bank transfer should have credited the customer's own balance but has not",
+          "not_for": "An outbound payment the recipient did not receive",
+          "examples": [
+            "I sent money from my other bank and my balance here did not change"
+          ]
+        },
+        "cash_withdrawal_not_recognised": "An ATM or cash withdrawal the customer does not recognise appears on the account",
+        "exchange_charge": "A fee was added for converting currency",
+        "top_up_by_card_charge": "A fee was added when topping up by card",
+        "activate_my_card": "The customer wants an already received card turned on so it can be used",
         "cash_withdrawal_charge": {
           "what": "A fee was added to an ATM or cash withdrawal",
-          "not_for": "Fees on card purchases"
+          "not_for": "Fees on card purchases or on sending a transfer",
+          "examples": ["The ATM charged me a fee"]
         },
+        "card_about_to_expire": "The card expiry date is near and the customer asks about renewal or a replacement before expiry",
+        "apple_pay_or_google_pay": "The customer wants to add the card to Apple Pay or Google Pay, or asks if those wallets are supported",
+        "verify_my_identity": {
+          "what": "The customer wants to complete identity verification or asks how to pass KYC",
+          "not_for": "Asking why verification is required, or reporting that verification failed",
+          "examples": ["How do I verify my identity?"]
+        },
+        "country_support": "The customer asks whether the product works in a country, for travel, or for residents of a place",
         "other": {
           "what": "None of the intents above"
         }

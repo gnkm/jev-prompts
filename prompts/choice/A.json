@@ -9,15 +9,161 @@
       "type": "choice",
       "instructions": "Which intent best matches the customer's request in `query`?",
       "criteria": {
+        "card_arrival": {
+          "what": "The customer is waiting for a physical card that was already ordered and asks if it has arrived or where it is",
+          "not_for": "Asking how long delivery usually takes before or without tracking a specific order",
+          "examples": ["My new card still has not shown up"]
+        },
+        "card_linking": "The customer wants to attach an existing physical or virtual card to the app or account",
+        "exchange_rate": "The customer wants the current foreign-exchange rate, not a fee already charged",
+        "card_payment_wrong_exchange_rate": "A completed card purchase used a worse exchange rate than the customer expected",
+        "extra_charge_on_statement": "An unexplained extra line appears on the statement and is not identified as a known fee type",
+        "pending_cash_withdrawal": {
+          "what": "An ATM or cash withdrawal is still pending",
+          "not_for": "A pending card purchase or pending transfer",
+          "examples": ["My ATM withdrawal is still pending"]
+        },
+        "fiat_currency_support": "The customer asks which government-issued currencies the product supports",
+        "card_delivery_estimate": {
+          "what": "The customer wants the usual or promised delivery time for a card, not the status of a specific shipment",
+          "not_for": "Chasing a card that should already have arrived",
+          "examples": ["How many days does a new card usually take to arrive?"]
+        },
+        "automatic_top_up": "The customer wants to set, change, or stop automatic top-ups when the balance is low",
+        "card_not_working": "The card fails in general use and the cause is not a specific decline, ATM swallow, or contactless fault",
+        "exchange_via_app": "The customer wants to convert currency inside the app",
+        "lost_or_stolen_card": {
+          "what": "The physical card is missing, stolen, or the customer cannot find it and needs it blocked or replaced",
+          "not_for": "Fraud on a card the customer still has, or a phone that was lost",
+          "examples": ["I think someone stole my card"]
+        },
+        "age_limit": "The customer asks the minimum age to open or use the account or card",
+        "pin_blocked": "The PIN is locked after wrong attempts and the customer cannot use it",
+        "contactless_not_working": "Contactless tap-to-pay fails while other card uses may still work",
+        "top_up_by_bank_transfer_charge": "A fee was added when topping up by bank transfer",
+        "pending_top_up": "A top-up is still processing and has not credited yet",
+        "cancel_transfer": "The customer wants to stop an outbound transfer that has not finished",
+        "top_up_limits": "The customer asks how much they can top up, or has hit a top-up cap",
+        "wrong_amount_of_cash_received": "The ATM dispensed a different amount of cash than was charged",
         "card_payment_fee_charged": {
           "what": "A fee was added to a card payment the customer made",
-          "not_for": "Fees on cash withdrawals or on transfers",
+          "not_for": "Fees on cash withdrawals, bank transfers, or top-ups",
           "examples": ["Why was I charged extra for paying by card?"]
         },
+        "transfer_not_received_by_recipient": {
+          "what": "The customer sent money and the recipient says it never arrived",
+          "not_for": "The sender's own balance not updating after an inbound transfer",
+          "examples": ["The person I paid did not get the money"]
+        },
+        "supported_cards_and_currencies": "The customer asks which card schemes or currencies can be used",
+        "getting_virtual_card": "The customer wants a reusable virtual card number, not a disposable one and not a physical card",
+        "card_acceptance": "The customer asks where the card can be used, or a merchant will not take it",
+        "top_up_reverted": {
+          "what": "A top-up that had succeeded was later undone and the money taken back",
+          "not_for": "A top-up that never completed in the first place",
+          "examples": ["You reversed a top-up that had already landed"]
+        },
+        "balance_not_updated_after_cheque_or_cash_deposit": "A cheque or cash deposit has not appeared on the balance",
+        "card_payment_not_recognised": "A card purchase the customer does not recognise appears on the account",
+        "edit_personal_details": "The customer wants to change name, address, email, or other profile data",
+        "why_verify_identity": {
+          "what": "The customer asks why the bank is requesting identity checks",
+          "not_for": "Wanting to start or finish the verification steps",
+          "examples": ["Why do you need my passport?"]
+        },
+        "unable_to_verify_identity": "Identity verification was attempted and failed or cannot be completed",
+        "get_physical_card": "The customer asks how to obtain a physical card they do not yet have, including first-time issue",
+        "visa_or_mastercard": "The customer asks whether the card is Visa or Mastercard, or wants a specific scheme",
+        "topping_up_by_card": "The customer wants to add money using a debit or credit card",
+        "disposable_card_limits": "The customer asks spending or count limits that apply to disposable virtual cards",
+        "compromised_card": {
+          "what": "The customer still has the card but suspects the details were stolen or used without permission",
+          "not_for": "A card that is physically lost or stolen",
+          "examples": ["Someone knows my card number and used it"]
+        },
+        "atm_support": "The customer asks which ATMs work, or whether cash withdrawal is supported",
+        "direct_debit_payment_not_recognised": "A direct debit the customer does not recognise was taken",
+        "passcode_forgotten": "The customer cannot remember the app passcode or login code",
+        "declined_cash_withdrawal": {
+          "what": "An ATM or cash withdrawal was declined",
+          "not_for": "A declined card purchase or declined transfer",
+          "examples": ["The ATM refused my withdrawal"]
+        },
+        "pending_card_payment": {
+          "what": "A card purchase is still pending and has not settled",
+          "not_for": "A pending ATM withdrawal or a pending outbound transfer",
+          "examples": ["Why is this card purchase still pending?"]
+        },
+        "lost_or_stolen_phone": "The phone used with the app was lost or stolen, not the payment card",
+        "request_refund": {
+          "what": "The customer wants the bank to start a refund or chargeback",
+          "not_for": "A refund that was already promised but has not appeared",
+          "examples": ["Please refund this payment"]
+        },
+        "declined_transfer": "An outbound transfer was refused",
+        "Refund_not_showing_up": {
+          "what": "A refund the customer expects is missing from the balance or statement",
+          "not_for": "Asking to start a new refund",
+          "examples": ["The merchant refunded me but I do not see it"]
+        },
+        "declined_card_payment": {
+          "what": "A card purchase was declined at a merchant",
+          "not_for": "A declined ATM withdrawal or a declined transfer",
+          "examples": ["My card was declined in a shop"]
+        },
+        "pending_transfer": "An outbound transfer is still processing",
+        "terminate_account": "The customer wants to close the account permanently",
+        "card_swallowed": "An ATM kept or captured the physical card",
+        "transaction_charged_twice": "The same payment appears more than once",
+        "verify_source_of_funds": "The bank asked where the customer's money came from and the customer is responding to that check",
+        "transfer_timing": "The customer asks how long a transfer takes in general, not about one missing payment",
+        "reverted_card_payment?": "A card payment that had gone through was later reversed",
+        "change_pin": "The customer wants to set or replace the card PIN, and the PIN is not blocked",
+        "beneficiary_not_allowed": "The payee is blocked or not permitted for transfers",
+        "transfer_fee_charged": {
+          "what": "A fee was added when the customer sent money to someone",
+          "not_for": "Fees on card purchases or ATM withdrawals",
+          "examples": ["Why did sending money cost extra?"]
+        },
+        "receiving_money": "The customer wants to know how others can pay them, or is expecting inbound funds",
+        "failed_transfer": "An outbound transfer did not complete",
+        "transfer_into_account": "The customer wants to move money into this account from another of their accounts",
+        "verify_top_up": "The customer must confirm a top-up (for example a verification charge) before it completes",
+        "getting_spare_card": "The customer wants an extra physical card on the same account, such as for a partner",
+        "top_up_by_cash_or_cheque": "The customer wants to add money with cash or a cheque",
+        "order_physical_card": "The customer wants to place an order for a physical card, including a replacement order",
+        "virtual_card_not_working": "A virtual card number is failing in use",
+        "wrong_exchange_rate_for_cash_withdrawal": "An ATM withdrawal used a worse exchange rate than expected",
+        "get_disposable_virtual_card": "The customer wants a single-use virtual card, not a reusable virtual card",
+        "top_up_failed": {
+          "what": "A top-up attempt did not complete and the money was not added",
+          "not_for": "A top-up that completed and was later reversed",
+          "examples": ["My top-up did not go through"]
+        },
+        "balance_not_updated_after_bank_transfer": {
+          "what": "An inbound bank transfer should have credited the customer's own balance but has not",
+          "not_for": "An outbound payment the recipient did not receive",
+          "examples": [
+            "I sent money from my other bank and my balance here did not change"
+          ]
+        },
+        "cash_withdrawal_not_recognised": "An ATM or cash withdrawal the customer does not recognise appears on the account",
+        "exchange_charge": "A fee was added for converting currency",
+        "top_up_by_card_charge": "A fee was added when topping up by card",
+        "activate_my_card": "The customer wants an already received card turned on so it can be used",
         "cash_withdrawal_charge": {
           "what": "A fee was added to an ATM or cash withdrawal",
-          "not_for": "Fees on card purchases"
+          "not_for": "Fees on card purchases or on sending a transfer",
+          "examples": ["The ATM charged me a fee"]
         },
+        "card_about_to_expire": "The card expiry date is near and the customer asks about renewal or a replacement before expiry",
+        "apple_pay_or_google_pay": "The customer wants to add the card to Apple Pay or Google Pay, or asks if those wallets are supported",
+        "verify_my_identity": {
+          "what": "The customer wants to complete identity verification or asks how to pass KYC",
+          "not_for": "Asking why verification is required, or reporting that verification failed",
+          "examples": ["How do I verify my identity?"]
+        },
+        "country_support": "The customer asks whether the product works in a country, for travel, or for residents of a place",
         "other": {
           "what": "None of the intents above"
         }
