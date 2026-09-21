@@ -9,6 +9,12 @@ from jev_prompts.data.fetch import (
     verify_ledgers,
 )
 from jev_prompts.data.ledger import LedgerSchemaError, read_ledger, write_ledger
+from jev_prompts.data.pools import (
+    PoolError,
+    build_pool,
+    extract_ledgers,
+    is_boundary,
+)
 from jev_prompts.data.schema import LEDGER_COLUMNS
 
 __all__ = [
@@ -17,9 +23,13 @@ __all__ = [
     "FetchError",
     "HashMismatchError",
     "LedgerSchemaError",
+    "PoolError",
+    "build_pool",
     "extract_cases",
+    "extract_ledgers",
     "fetch_and_verify",
     "fetch_datasets",
+    "is_boundary",
     "read_ledger",
     "verify_ledgers",
     "write_ledger",

@@ -56,6 +56,12 @@ _NOUL_GOLD_STR: Final[dict[str, str]] = {
     "yes": "yes",
     "no": "no",
 }
+_NOUL_PRED_STR: Final[dict[str, str]] = {
+    "spam": "1",
+    "ham": "0",
+    "yes": "1",
+    "no": "0",
+}
 _YES_LABELS: Final[tuple[str, ...]] = ("yes",)
 _QUANTILE_INTERPOLATION: Final = "linear"
 
@@ -130,11 +136,7 @@ def prepare_cases(logs: pl.DataFrame) -> pl.DataFrame:
             frame = frame.with_columns(pl.lit(None).alias(name))
     gold = pl.col("gold").cast(pl.String)
     has_error = pl.col("error").is_not_null() & (pl.col("error").cast(pl.String) != "")
-    pred = (
-        pl.when(has_error)
-        .then(None)
-        .otherwise(pl.col("answer").cast(pl.Float64, strict=False))
-    )
+    pred = _pred_expr(has_error)
     gold_score = gold.replace_strict(
         _SCORE_GOLD_STR, default=None, return_dtype=pl.String
     ).cast(pl.Float64, strict=False)
@@ -207,6 +209,27 @@ def prepare_cases(logs: pl.DataFrame) -> pl.DataFrame:
             .then(noul_valid)
             .otherwise(pl.lit(False))
         )
+    )
+
+
+def _pred_expr(has_error: pl.Expr) -> pl.Expr:
+    """数値のほか、LLM の spam/ham や I/C/S/E も主指標に載せる。"""
+    numeric = pl.col("answer").cast(pl.Float64, strict=False)
+    label = pl.col("answer").cast(pl.String)
+    noul = label.replace_strict(
+        _NOUL_PRED_STR, default=None, return_dtype=pl.String
+    ).cast(pl.Float64, strict=False)
+    score = label.replace_strict(
+        _SCORE_GOLD_STR, default=None, return_dtype=pl.String
+    ).cast(pl.Float64, strict=False)
+    return (
+        pl.when(has_error)
+        .then(None)
+        .when(pl.col("task") == "noul")
+        .then(numeric.fill_null(noul))
+        .when(pl.col("task") == "score")
+        .then(numeric.fill_null(score))
+        .otherwise(numeric)
     )
 
 

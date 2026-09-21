@@ -10,7 +10,7 @@ Jev に 3 つの課題を与え、精度の評価をおこなう。
 表の処理は Polars を使う。測定値の扱いは [results/README.md](results/README.md)。
 
 Python パッケージ `jev_prompts` の骨格（uv / pytest / Ruff / Typer / Polars / matplotlib）と、ケースネストの実験ランナー、指標の Polars 集計、対応あり検定（McNemar / ブートストラップ 95% CI / Holm）、公開 markdown レポートがある。
-入口は `python -m jev_prompts`（Typer）。準備は `fetch`、実行は `preflight` / `run` / `fanout`、公開物は `report` で切り分ける。ロジックは `jev_prompts` に置き、`scripts/` は薄い入口である。
+入口は `python -m jev_prompts`（Typer）。準備は `fetch` / `extract`、実行は `preflight` / `run` / `fanout`、公開物は `prices` / `report` / `findings` で切り分ける。ロジックは `jev_prompts` に置き、`scripts/` は薄い入口である。
 パッケージは `report → stats → metrics → runners → prompts → clients → data → config` の一方向レイヤで、Import Linter が逆向きの import を止める。
 複雑度は Radon が測り、Xenon が `pyproject.toml` の閾値で CI を落とす。緩める変更は CODEOWNERS 対象。
 ケース台帳は `case_id` / split / gold / content_hash / 抽出シードを Polars で扱う。本文は同梱しない。
@@ -38,6 +38,7 @@ uv run ruff format --check .
 uv run lint-imports
 uv run python scripts/check_complexity.py
 uv run reuse lint
+pnpm exec biome ci .
 ```
 
 ## CLI
@@ -51,17 +52,25 @@ uv run reuse lint
 uv run python -m jev_prompts fetch
 # 同等の薄い入口: uv run python scripts/fetch_data.py
 
+# 台帳抽出（本文は書かない。課題あたり test 60 / dev 40）
+uv run python -m jev_prompts extract
+# 同等の薄い入口: uv run python scripts/extract_cases.py
+
 # 実行（OPENROUTER_API_KEY と本文が要る。無ければ非ゼロ終了）
-uv run python -m jev_prompts preflight
-uv run python -m jev_prompts run
+uv run python -m jev_prompts preflight --split test
+uv run python -m jev_prompts run --split test
 uv run python -m jev_prompts fanout
+uv run python -m jev_prompts prices
 uv run python -m jev_prompts report
+uv run python -m jev_prompts findings
 ```
 
-- `preflight`: 決定性・トークン上限（32k）・応答のモデル版を事前確認する。失敗したら本ランに進まない。
-- `run`: ケースごとに全条件を連続実行する精度比較。fan-out は含めない。
+- `preflight`: 決定性・トークン上限（32k）・応答のモデル版を事前確認する。失敗したら本ランに進まない。`--split test` で本ランと同じケース集合にする。
+- `run`: ケースごとに全条件を連続実行する精度比較。fan-out は含めない。`--split test` で報告対象の 60 件だけを回す。途中終了したログがあれば `(case_id, condition)` を飛ばして再開する。
 - `fanout`: A の質問群を 1 回にまとめる / 分割する別ラン。コスト・遅延・一致率だけを見る。
+- `prices`: 測定日の OpenRouter 掲載単価を `results/prices.md` に書く。キーが要る。既定の CI には載せない。
 - `report`: `results/published.jsonl` から指標マトリクス・較正・コスト×精度の markdown と図を `results/` に書く。API キーは不要。同等の薄い入口は `scripts/write_report.py`。
+- `findings`: H1〜H4 の判定と A の誤答内訳を `results/findings.md` に書く。入力本文は出さない。目視分類があれば `results/a_error_review.jsonl` を読む。
 
 キーは環境変数 `OPENROUTER_API_KEY`（再現ランでは Podman secret）。本文が無い、ハッシュが台帳と一致しない、台帳が無い、または空なら実行系は失敗する。暗黙の再取得はしない。
 
@@ -120,7 +129,9 @@ uv run python scripts/run_fanout.py --mock --log-dir data/logs
 
 合格ライン（例: Choice で A が B1 に対し top-1 +5pt）はコードのアサーションにしない。レポートの判定欄で使う。既知の RequestLog フィクスチャで数値が手計算と一致することをテストする。
 
-`jev_prompts.report.write_report` が公開行から `results/report.md` を書く。課題ごとの条件 × 指標（ブートストラップ CI 付き）、10 ビンの較正表と reliability diagram、コスト × 精度の表と散布図。図は `results/figures/` に出し、markdown から参照する。`query` / `message` / `state_json` は出さない。測定値の扱いは [results/README.md](results/README.md)。
+`jev_prompts.report.write_report` が公開行から `results/report.md` を書く。課題ごとの条件 × 指標（ブートストラップ CI 付き）、10 ビンの較正表と reliability diagram、コスト × 精度の表と散布図。図は `results/figures/` に出し、markdown から参照する。入力本文のフィールドは出さない。測定値の扱いは [results/README.md](results/README.md)。
+
+本ラン（test 60 件 × 8 条件 × 3 課題）の仮説 H1〜H4 と A の誤答目視は `results/findings.md`、測定日の単価は `results/prices.md`。ライブ API は既定の CI に載せない。
 
 ## データ
 
@@ -151,14 +162,15 @@ uv run python -m jev_prompts fetch
 評価設計書の L1 / L2 に L3 を足し、実験は 8 条件である。選定の正本は
 [ADR-0002](docs/adr/competitor-llm.md)、実装上の境界は [ARCHITECTURE.md](ARCHITECTURE.md)。
 
-| 条件 | モデル | モデル ID | 固定プロバイダ |
+| 条件 | モデル | モデル ID | provider.order |
 | --- | --- | --- | --- |
-| L1 / L2 | GPT-5.6 Luna | `openai/gpt-5.6-luna` | OpenAI |
-| L3 | Claude Sonnet 5 | `anthropic/claude-sonnet-5` | Anthropic |
+| L1 / L2 | GPT-5.6 Luna | `openai/gpt-5.6-luna` | OpenAI, Azure |
+| L3 | Claude Sonnet 5 | `anthropic/claude-sonnet-5` | Anthropic, Amazon Bedrock |
 
-OpenRouter で呼び、`provider.order` を上表のプロバイダに固定する。
+OpenRouter で呼び、`provider.order` を上表の順に固定する。第一希望が地域フィルタで落ちても、リスト内の次だけを使う。
 `allow_fallbacks` は false、`require_parameters` は true、`data_collection` は deny。
-エイリアスは使わない。
+temperature は送らない（対応エンドポイントが無く 404 になる）。Luna は `seed` を付け、Sonnet は付けない。
+エイリアスは使わない。実応答のプロバイダをログに残す。
 
 ## OpenRouter クライアント
 

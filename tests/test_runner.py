@@ -21,12 +21,14 @@ from jev_prompts.runners import (
     RequestLog,
     RunCase,
     iter_case_conditions,
+    local_frame,
     run_experiment,
     to_published,
     write_local_logs,
     write_published_records,
 )
-from jev_prompts.runners.execute import repeating_execute
+from jev_prompts.runners.execute import _usage_tokens, repeating_execute
+from jev_prompts.runners.experiment import assert_resume_matches
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 HASH_A = "a" * 64
@@ -231,6 +233,78 @@ def test_probabilities_required() -> None:
         )
 
 
+def test_assert_resume_matches_accepts_same_cases() -> None:
+    existing = local_frame([_log(CASES[0], "A")])
+    assert_resume_matches(existing, CASES[:1])
+
+
+def test_assert_resume_matches_rejects_extra_case_id() -> None:
+    existing = local_frame([_log(CASES[0], "A"), _log(CASES[1], "A")])
+    with pytest.raises(LogSchemaError, match="今回のケースが無い"):
+        assert_resume_matches(existing, CASES[:1])
+
+
+def test_assert_resume_matches_rejects_split_mismatch() -> None:
+    existing = local_frame([_log(CASES[0], "A")])
+    other = RunCase(
+        case_id=CASES[0].case_id,
+        task=CASES[0].task,
+        split="dev",
+        gold=CASES[0].gold,
+        content_hash=CASES[0].content_hash,
+    )
+    with pytest.raises(LogSchemaError, match="split"):
+        assert_resume_matches(existing, [other])
+
+
+def test_assert_resume_matches_rejects_hash_mismatch() -> None:
+    existing = local_frame([_log(CASES[0], "A")])
+    other = RunCase(
+        case_id=CASES[0].case_id,
+        task=CASES[0].task,
+        split=CASES[0].split,
+        gold=CASES[0].gold,
+        content_hash=HASH_B,
+    )
+    with pytest.raises(LogSchemaError, match="content_hash"):
+        assert_resume_matches(existing, [other])
+
+
+def test_assert_resume_matches_accepts_patched_model() -> None:
+    existing = local_frame([_log(CASES[0], "A", model="typesafe/jev-1.13-20260917")])
+    assert_resume_matches(existing, CASES[:1])
+
+
+def test_assert_resume_matches_rejects_other_model_family() -> None:
+    existing = local_frame([_log(CASES[0], "A", model="typesafe/jev-1.130")])
+    with pytest.raises(LogSchemaError, match="model"):
+        assert_resume_matches(existing, CASES[:1])
+
+
+def test_assert_resume_matches_rejects_model_mismatch() -> None:
+    existing = local_frame([_log(CASES[0], "A", model="openai/gpt-5.6-luna")])
+    with pytest.raises(LogSchemaError, match="model"):
+        assert_resume_matches(existing, CASES[:1])
+
+
+def test_run_experiment_skips_completed_pairs() -> None:
+    calls: list[tuple[str, str]] = []
+
+    def execute(case: RunCase, condition: str) -> RequestLog:
+        calls.append((case.case_id, condition))
+        return _log(case, condition)
+
+    local, _published = run_experiment(
+        CASES[:1],
+        execute,
+        conditions=("A", "B1"),
+        skip={(CASES[0].case_id, "A")},
+    )
+    assert calls == [(CASES[0].case_id, "B1")]
+    assert local.height == 1
+    assert local["condition"].to_list() == ["B1"]
+
+
 def test_execute_exception_becomes_error_row_with_probabilities() -> None:
     def execute(case: RunCase, condition: str) -> RequestLog:
         raise RuntimeError("boom")
@@ -281,3 +355,10 @@ def test_repeating_execute_averages_numeric_answers() -> None:
     assert log.usage_tokens == 36
     assert log.routing_json is not None
     assert log.routing_json["repeats"] == 3
+
+
+def test_usage_tokens_reads_input_output_keys() -> None:
+    assert _usage_tokens({"input_tokens": 10, "output_tokens": 2}) == 12
+    assert _usage_tokens({"prompt_tokens": 3, "completion_tokens": 4}) == 7
+    assert _usage_tokens({"total_tokens": 9, "input_tokens": 1}) == 9
+    assert _usage_tokens({}) is None

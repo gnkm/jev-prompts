@@ -19,8 +19,6 @@ from jev_prompts.config.openrouter import (
     CHAT_COMPLETIONS_PATH,
     HTTP_TIMEOUT_SECONDS,
     JEV_MODEL_ID,
-    MAIN_SEED,
-    MAIN_TEMPERATURE,
     OPENROUTER_BASE_URL,
     SYSTEMONE_PATH,
     provider_routing,
@@ -296,9 +294,9 @@ class OpenRouterClient:
         *,
         model: str,
         messages: Sequence[Mapping[str, Any]],
-        provider: str,
-        temperature: float | None = MAIN_TEMPERATURE,
-        seed: int | None = MAIN_SEED,
+        provider: str | Sequence[str],
+        temperature: float | None = None,
+        seed: int | None = None,
         response_format: Mapping[str, Any] | None = None,
     ) -> LlmResult:
         if model == JEV_MODEL_ID or model.startswith("typesafe/jev"):

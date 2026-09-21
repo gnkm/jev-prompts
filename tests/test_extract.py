@@ -7,7 +7,7 @@ import pytest
 
 from case_pools import load_pool
 from jev_prompts.data import ExtractConfig, extract_cases, write_ledger
-from jev_prompts.data.extract import map_gold
+from jev_prompts.data.extract import _drop_duplicate_hashes, map_gold
 from jev_prompts.data.hashutil import content_hash
 from jev_prompts.data.schema import BODY_COLUMNS
 
@@ -80,6 +80,57 @@ def test_write_extracted_ledger_without_body(tmp_path: Path) -> None:
     text = path.read_text(encoding="utf-8")
     assert "synthetic" not in text
     assert '"text"' not in text
+
+
+def test_drop_duplicate_hashes_keeps_first_source_id() -> None:
+    records = [
+        {"source_id": "a", "message": "same", "gold": "no"},
+        {"source_id": "b", "message": "same", "gold": "yes"},
+        {"source_id": "c", "message": "other", "gold": "no"},
+    ]
+    kept = _drop_duplicate_hashes(records, "noul")
+    assert [row["source_id"] for row in kept] == ["a", "c"]
+
+
+def test_extract_rejects_duplicate_content_after_mapping() -> None:
+    rows = [
+        {
+            "source_id": "a",
+            "gold": "no",
+            "boundary": True,
+            "message": "same-sms",
+        },
+        {
+            "source_id": "b",
+            "gold": "no",
+            "boundary": True,
+            "message": "same-sms",
+        },
+        {
+            "source_id": "c",
+            "gold": "yes",
+            "boundary": True,
+            "message": "boundary-yes",
+        },
+        {
+            "source_id": "d",
+            "gold": "yes",
+            "boundary": False,
+            "message": "random-yes",
+        },
+        {
+            "source_id": "e",
+            "gold": "no",
+            "boundary": False,
+            "message": "random-no",
+        },
+    ]
+    pool = pl.DataFrame(rows)
+    config = ExtractConfig(seed=1, n_random=2, n_boundary=2, n_dev=2, n_test=2)
+    df = extract_cases(pool, task="noul", config=config)
+    assert df.height == 4
+    assert df["content_hash"].n_unique() == 4
+    assert "noul:b" not in df["case_id"].to_list()
 
 
 def test_mixed_score_gold_labels_share_a_stratum() -> None:

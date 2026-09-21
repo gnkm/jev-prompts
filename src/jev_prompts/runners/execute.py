@@ -21,9 +21,10 @@ from jev_prompts.clients import (
 )
 from jev_prompts.config import (
     LUNA_MODEL_ID,
-    LUNA_PROVIDER,
+    LUNA_PROVIDERS,
+    MAIN_SEED,
     SONNET_MODEL_ID,
-    SONNET_PROVIDER,
+    SONNET_PROVIDERS,
     provider_routing,
 )
 from jev_prompts.prompts.catalog import JEV_CONDITIONS, load_bundle
@@ -32,20 +33,31 @@ from jev_prompts.runners.payload import materialize_messages, materialize_state
 from jev_prompts.runners.schema import RequestLog
 
 
-def _usage_tokens(usage: Mapping[str, Any] | None) -> int | None:
-    if not usage:
-        return None
-    for key in ("total_tokens", "totalTokens"):
+def _usage_part(usage: Mapping[str, Any], *keys: str) -> int | None:
+    for key in keys:
         value = usage.get(key)
         if isinstance(value, int | float) and not isinstance(value, bool):
             return int(value)
-    prompt = usage.get("prompt_tokens", usage.get("promptTokens"))
-    completion = usage.get("completion_tokens", usage.get("completionTokens"))
-    parts = [
-        int(item)
-        for item in (prompt, completion)
-        if isinstance(item, int | float) and not isinstance(item, bool)
-    ]
+    return None
+
+
+def _usage_tokens(usage: Mapping[str, Any] | None) -> int | None:
+    if not usage:
+        return None
+    total = _usage_part(usage, "total_tokens", "totalTokens")
+    if total is not None:
+        return total
+    prompt = _usage_part(
+        usage, "prompt_tokens", "promptTokens", "input_tokens", "inputTokens"
+    )
+    completion = _usage_part(
+        usage,
+        "completion_tokens",
+        "completionTokens",
+        "output_tokens",
+        "outputTokens",
+    )
+    parts = [item for item in (prompt, completion) if item is not None]
     if not parts:
         return None
     return sum(parts)
@@ -128,10 +140,10 @@ def _from_llm(
     )
 
 
-def _chat_pair(condition: str) -> tuple[str, str]:
+def _chat_route(condition: str) -> tuple[str, tuple[str, ...], int | None]:
     if condition == "L3":
-        return SONNET_MODEL_ID, SONNET_PROVIDER
-    return LUNA_MODEL_ID, LUNA_PROVIDER
+        return SONNET_MODEL_ID, SONNET_PROVIDERS, None
+    return LUNA_MODEL_ID, LUNA_PROVIDERS, MAIN_SEED
 
 
 def execute_case(
@@ -163,9 +175,9 @@ def execute_case(
         if bundle.llm_messages is None:
             raise ValueError(f"{condition} に llm_messages が無い")
         messages = materialize_messages(case.task, bundle.llm_messages, record)
-        model, provider = _chat_pair(condition)
+        model, providers, seed = _chat_route(condition)
         result = client.chat_completions(
-            model=model, messages=messages, provider=provider
+            model=model, messages=messages, provider=providers, seed=seed
         )
         latency_ms = (time.perf_counter() - started) * 1000
         return _from_llm(
@@ -173,7 +185,7 @@ def execute_case(
             condition,
             result,
             messages=messages,
-            routing=provider_routing(provider),
+            routing=provider_routing(providers),
             latency_ms=latency_ms,
         )
     except (OpenRouterError, ValueError) as exc:

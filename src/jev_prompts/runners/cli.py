@@ -26,14 +26,22 @@ from jev_prompts.config import (
     RESULTS_DIR,
     SONNET_MODEL_ID,
 )
+from jev_prompts.data.extract import ExtractConfig
 from jev_prompts.data.fetch import FetchError, fetch_and_verify
-from jev_prompts.prompts.catalog import load_bundle
+from jev_prompts.data.pools import extract_ledgers
+from jev_prompts.data.schema import SPLITS, SplitId
+from jev_prompts.prompts.catalog import CONDITIONS, load_bundle
 from jev_prompts.runners.execute import (
     execute_for_experiment,
     execute_for_fanout,
     repeating_execute,
 )
-from jev_prompts.runners.experiment import RunCase, run_experiment
+from jev_prompts.runners.experiment import (
+    RunCase,
+    assert_resume_matches,
+    completed_pairs,
+    run_experiment,
+)
 from jev_prompts.runners.fanout import (
     FanoutComparison,
     compare_fanout,
@@ -51,6 +59,9 @@ from jev_prompts.runners.preflight import (
 from jev_prompts.runners.schema import (
     LogSchemaError,
     RequestLog,
+    local_frame,
+    read_local_logs,
+    to_published,
     write_local_logs,
     write_published_records,
 )
@@ -58,6 +69,7 @@ from jev_prompts.runners.schema import (
 APP_HELP = f"""Jev プロンプト実験の CLI。
 
 準備: fetch（配布元から data/raw へ取得し、台帳ハッシュと照合する）
+抽出: extract（raw から本文なし台帳を切る）
 実行: preflight / run / fanout（data/ だけを読む。配布元には触れない）
 
 systemone のモデル ID: {JEV_MODEL_ID}
@@ -76,6 +88,10 @@ RawDir = Annotated[Path, typer.Option("--raw-dir", help="配布元の展開先")
 CasesDir = Annotated[Path, typer.Option("--cases-dir", help="ケース台帳のディレクトリ")]
 LogsDir = Annotated[
     Path, typer.Option("--logs-dir", "--log-dir", help="ローカルログの書き出し先")
+]
+SplitOpt = Annotated[
+    str | None,
+    typer.Option("--split", help="dev または test。省略時は両方"),
 ]
 
 _MOCK_QUESTIONS = {
@@ -103,6 +119,20 @@ def _guard_execution() -> None:
         _fail(str(exc))
 
 
+def _parse_split(value: str | None) -> SplitId | None:
+    if value is None or value == "":
+        return None
+    if value not in SPLITS:
+        _fail(f"未知の split: {value}")
+    return value  # type: ignore[return-value]
+
+
+def _existing_local(path: Path) -> pl.DataFrame:
+    if not path.is_file() or path.stat().st_size == 0:
+        return local_frame([])
+    return read_local_logs(path)
+
+
 @app.command("fetch")
 def fetch_command(
     raw_dir: RawDir = RAW_DIR,
@@ -117,16 +147,32 @@ def fetch_command(
     typer.echo(f"ハッシュ照合 OK ({checked} 件)")
 
 
+@app.command("extract")
+def extract_command(
+    raw_dir: RawDir = RAW_DIR,
+    cases_dir: CasesDir = CASES_DIR,
+    seed: Annotated[int, typer.Option("--seed", help="抽出シード")] = 20260921,
+) -> None:
+    """raw から課題あたり 100 件の台帳を切る。本文は書かない。"""
+    try:
+        paths = extract_ledgers(raw_dir, cases_dir, config=ExtractConfig(seed=seed))
+    except (FetchError, ValueError) as exc:
+        _fail(str(exc))
+    for path in paths:
+        typer.echo(str(path))
+
+
 @app.command("preflight")
 def preflight_command(
     raw_dir: RawDir = RAW_DIR,
     cases_dir: CasesDir = CASES_DIR,
     logs_dir: LogsDir = LOCAL_LOGS_DIR,
+    split: SplitOpt = None,
 ) -> None:
     """実行前: 決定性・トークン・モデル版を確認する。本文とキーが要る。"""
     _guard_execution()
     try:
-        report = run_preflight(raw_dir, cases_dir)
+        report = run_preflight(raw_dir, cases_dir, split=_parse_split(split))
     except (MissingApiKeyError, MissingBodyError, FetchError, PreflightError) as exc:
         _fail(str(exc))
     write_preflight_report(report, logs_dir / "preflight.json")
@@ -151,11 +197,12 @@ def run_command(
     results_dir: Annotated[
         Path, typer.Option("--results-dir", help="公開用 results")
     ] = RESULTS_DIR,
+    split: SplitOpt = None,
 ) -> None:
     """本ラン: ケースごとに全条件を連続実行する。fan-out は含めない。"""
     _guard_execution()
     try:
-        pairs = load_run_cases(raw_dir, cases_dir)
+        pairs = load_run_cases(raw_dir, cases_dir, split=_parse_split(split))
     except (MissingBodyError, FetchError) as exc:
         _fail(str(exc))
     case_ids = [case.case_id for case, _record in pairs]
@@ -165,16 +212,43 @@ def run_command(
         _fail(str(exc))
     cases = [case for case, _record in pairs]
     records = {case.case_id: record for case, record in pairs}
-    with OpenRouterClient() as client:
-        execute = repeating_execute(execute_for_experiment(client, records), repeats)
-        local, published = run_experiment(cases, execute)
     logs_dir.mkdir(parents=True, exist_ok=True)
     results_dir.mkdir(parents=True, exist_ok=True)
-    write_local_logs(local, logs_dir / "request_log.jsonl")
-    write_published_records(published, results_dir / "published.jsonl")
+    local_path = logs_dir / "request_log.jsonl"
+    published_path = results_dir / "published.jsonl"
+    existing = _existing_local(local_path)
+    try:
+        assert_resume_matches(existing, cases)
+    except LogSchemaError as exc:
+        _fail(str(exc))
+    skip = completed_pairs(existing)
+    planned = len(cases) * len(CONDITIONS)
+    collected: list[RequestLog] = []
+
+    def on_row(log: RequestLog) -> None:
+        collected.append(log)
+        added = local_frame(collected)
+        combined = pl.concat([existing, added]) if existing.height else added
+        write_local_logs(combined, local_path)
+        write_published_records(to_published(combined), published_path)
+        current = existing.height + len(collected)
+        if current % 10 == 0 or current == planned:
+            typer.echo(f"{current}/{planned}")
+
+    with OpenRouterClient() as client:
+        execute = repeating_execute(execute_for_experiment(client, records), repeats)
+        new_local, _published = run_experiment(cases, execute, skip=skip, on_row=on_row)
+    if existing.height and new_local.height:
+        local = pl.concat([existing, new_local])
+    elif existing.height:
+        local = existing
+    else:
+        local = new_local
+    write_local_logs(local, local_path)
+    write_published_records(to_published(local), published_path)
     typer.echo(f"本ラン {local.height} 行（{repeats} 回平均）")
-    typer.echo(f"ローカルログ: {logs_dir / 'request_log.jsonl'}")
-    typer.echo(f"公開行: {results_dir / 'published.jsonl'}")
+    typer.echo(f"ローカルログ: {local_path}")
+    typer.echo(f"公開行: {published_path}")
 
 
 def _mock_fanout_execute(

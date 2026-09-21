@@ -6,14 +6,15 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterator, Mapping, Sequence
+from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
 import polars as pl
 
+from jev_prompts.config import JEV_MODEL_ID, LUNA_MODEL_ID, SONNET_MODEL_ID
 from jev_prompts.data.schema import SPLITS, TASKS, SplitId, TaskId
-from jev_prompts.prompts.catalog import CONDITIONS, ConditionId
+from jev_prompts.prompts.catalog import CONDITIONS, JEV_CONDITIONS, ConditionId
 from jev_prompts.runners.schema import (
     LogSchemaError,
     RequestLog,
@@ -83,32 +84,102 @@ def iter_case_conditions(
             yield parsed, condition
 
 
+def completed_pairs(frame: pl.DataFrame) -> frozenset[tuple[str, str]]:
+    """再開用。(case_id, condition) の集合。"""
+    if frame.height == 0 or "case_id" not in frame.columns:
+        return frozenset()
+    if "condition" not in frame.columns:
+        return frozenset()
+    return frozenset(
+        zip(frame["case_id"].to_list(), frame["condition"].to_list(), strict=True)
+    )
+
+
+def expected_run_model(condition: str) -> str:
+    if condition in JEV_CONDITIONS:
+        return JEV_MODEL_ID
+    if condition in {"L1", "L2"}:
+        return LUNA_MODEL_ID
+    return SONNET_MODEL_ID
+
+
+def _model_compatible(logged: str, expected: str) -> bool:
+    """API が返すパッチ付き ID（`{expected}-YYYYMMDD`）を認める。"""
+    return logged == expected or logged.startswith(f"{expected}-")
+
+
+def assert_resume_matches(
+    existing: pl.DataFrame, cases: Sequence[RunCase | Mapping[str, Any]]
+) -> None:
+    """既存ログが今回のケース・モデルと違うなら再開しない。"""
+    if existing.height == 0:
+        return
+    wanted = {}
+    for item in cases:
+        parsed = as_run_case(item)
+        wanted[parsed.case_id] = parsed
+    extra = sorted(set(existing["case_id"].to_list()) - set(wanted))
+    if extra:
+        sample = ", ".join(extra[:5])
+        raise LogSchemaError(f"既存ログに今回のケースが無い ID がある: {sample}")
+    cols = set(existing.columns)
+    for row in existing.iter_rows(named=True):
+        case = wanted[str(row["case_id"])]
+        if "split" in cols and row.get("split") not in {None, case.split}:
+            raise LogSchemaError(
+                f"既存ログの split が一致しない: {case.case_id} "
+                f"{row.get('split')} != {case.split}"
+            )
+        if "content_hash" in cols and row.get("content_hash") not in {
+            None,
+            case.content_hash,
+        }:
+            raise LogSchemaError(
+                f"既存ログの content_hash が一致しない: {case.case_id}"
+            )
+        if "model" not in cols:
+            continue
+        model = row.get("model")
+        if model in {None, ""}:
+            continue
+        expected = expected_run_model(str(row["condition"]))
+        if not _model_compatible(str(model), expected):
+            raise LogSchemaError(
+                f"既存ログの model が一致しない: {case.case_id}/"
+                f"{row.get('condition')} {model} != {expected}"
+            )
+
+
 def run_experiment(
     cases: Sequence[RunCase | Mapping[str, Any]],
     execute: ExecuteFn,
     *,
     conditions: Sequence[str] | None = None,
+    skip: Iterable[tuple[str, str]] | None = None,
+    on_row: Callable[[RequestLog], None] | None = None,
 ) -> tuple[pl.DataFrame, pl.DataFrame]:
     """1 リクエスト 1 行のローカルログと、本文なしの公開行を返す。"""
+    seen = frozenset(skip) if skip is not None else frozenset()
     logs: list[RequestLog] = []
     for case, condition in iter_case_conditions(cases, conditions):
+        if (case.case_id, condition) in seen:
+            continue
         try:
             log = execute(case, condition)
         except Exception as exc:
-            logs.append(
-                RequestLog.failed(
-                    case_id=case.case_id,
-                    task=case.task,
-                    condition=condition,
-                    split=case.split,
-                    gold=case.gold,
-                    content_hash=case.content_hash,
-                    error=f"{type(exc).__name__}: {exc}",
-                )
+            log = RequestLog.failed(
+                case_id=case.case_id,
+                task=case.task,
+                condition=condition,
+                split=case.split,
+                gold=case.gold,
+                content_hash=case.content_hash,
+                error=f"{type(exc).__name__}: {exc}",
             )
-            continue
         if not isinstance(log, RequestLog):
             raise TypeError("execute は RequestLog を返す")
         logs.append(log)
+        if on_row is not None:
+            on_row(log)
     local = local_frame(logs)
     return local, to_published(local)

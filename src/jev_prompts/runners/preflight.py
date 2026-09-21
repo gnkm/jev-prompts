@@ -238,6 +238,7 @@ def run_preflight(
     execute: ExecuteFn | None = None,
     prompts_root: Path | None = None,
     sample_size: int = DETERMINISM_SAMPLE_SIZE,
+    split: str | None = None,
 ) -> PreflightReport:
     """キー・本文・トークン・モデル版・決定性を順に確認する。"""
     require_api_key()
@@ -247,7 +248,7 @@ def run_preflight(
     active = client or OpenRouterClient()
     try:
         model = probe_model_version(active)
-        cases = load_run_cases(raw_root, cases_root)
+        cases = load_run_cases(raw_root, cases_root, split=split)
         if execute is None:
             from jev_prompts.runners.execute import execute_case
 

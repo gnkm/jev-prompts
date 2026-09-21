@@ -162,6 +162,9 @@ def test_matching_hashes_pass(tmp_path: Path) -> None:
     choice = load_task_records(raw_root, "choice")
     score = load_task_records(raw_root, "score")
     noul = load_task_records(raw_root, "noul")
+    assert choice["test:0"]["gold"] == "card_arrival"
+    assert score["10"]["gold"] == "S"
+    assert noul["0"]["gold"] == "ham"
     write_ledger(
         pl.DataFrame(
             [
@@ -295,6 +298,17 @@ def test_lfs_pointer_is_resolved(tmp_path: Path) -> None:
     assert href in transport.gets
     records = load_task_records(tmp_path / "raw", "score")
     assert records["10"]["query"] == "running shoes"
+
+
+def test_sms_fallback_when_uci_fails(tmp_path: Path) -> None:
+    payloads = _remote_payloads()
+    del payloads[_url_ending("sms+spam+collection.zip")]
+    fallback = REMOTE_FILES[-1].fallback_urls[0]
+    payloads[fallback] = b"ham\tsee you at 7\nspam\tWIN a prize now\n"
+    fetch_datasets(tmp_path / "raw", transport=FakeTransport(payloads))
+    records = load_task_records(tmp_path / "raw", "noul")
+    assert records["0"]["gold"] == "ham"
+    assert records["1"]["gold"] == "spam"
 
 
 def test_git_ignores_data_raw_bodies() -> None:

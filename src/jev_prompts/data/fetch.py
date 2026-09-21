@@ -70,6 +70,7 @@ class RemoteFile:
     relative_path: str
     kind: Literal["file", "zip"]
     lfs_repo: str | None = None
+    fallback_urls: tuple[str, ...] = ()
 
 
 REMOTE_FILES: tuple[RemoteFile, ...] = (
@@ -111,6 +112,10 @@ REMOTE_FILES: tuple[RemoteFile, ...] = (
         url="https://archive.ics.uci.edu/static/public/228/sms+spam+collection.zip",
         relative_path="sms_spam",
         kind="zip",
+        fallback_urls=(
+            "https://raw.githubusercontent.com/justmarkham/pycon-2016-tutorial/"
+            "master/data/sms.tsv",
+        ),
     ),
 )
 
@@ -135,16 +140,41 @@ def fetch_datasets(raw_root: Path, *, transport: Transport | None = None) -> lis
     written: list[Path] = []
     for remote in REMOTE_FILES:
         dest = raw_root / remote.relative_path
-        payload = _download(client, remote)
-        if remote.kind == "zip":
-            dest.mkdir(parents=True, exist_ok=True)
-            _extract_zip(payload, dest)
-            written.append(dest)
-            continue
-        dest.parent.mkdir(parents=True, exist_ok=True)
-        dest.write_bytes(payload)
+        _store_remote(client, remote, dest)
         written.append(dest)
     return written
+
+
+def _store_remote(transport: Transport, remote: RemoteFile, dest: Path) -> None:
+    try:
+        payload = _download(transport, remote)
+    except FetchError as exc:
+        _store_fallback(transport, remote, dest, exc)
+        return
+    if remote.kind == "zip":
+        dest.mkdir(parents=True, exist_ok=True)
+        _extract_zip(payload, dest)
+        return
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.write_bytes(payload)
+
+
+def _store_fallback(
+    transport: Transport, remote: RemoteFile, dest: Path, cause: FetchError
+) -> None:
+    if not remote.fallback_urls:
+        raise cause
+    errors = [str(cause)]
+    for url in remote.fallback_urls:
+        try:
+            payload = transport.get(url)
+        except FetchError as exc:
+            errors.append(str(exc))
+            continue
+        dest.mkdir(parents=True, exist_ok=True)
+        (dest / "SMSSpamCollection").write_bytes(payload)
+        return
+    raise FetchError("; ".join(errors)) from cause
 
 
 def verify_ledgers(raw_root: Path, cases_root: Path) -> int:
@@ -215,14 +245,18 @@ def load_banking77(directory: Path) -> dict[str, dict[str, Any]]:
                 text_index = header.index("text")
             except ValueError as exc:
                 raise FetchError(f"BANKING77 に text 列が無い: {path}") from exc
+            gold_index = header.index("category") if "category" in header else None
             for index, row in enumerate(reader):
                 if not row:
                     continue
                 source_id = f"{split}:{index}"
-                records[source_id] = {
+                record: dict[str, Any] = {
                     "source_id": source_id,
                     "text": row[text_index],
                 }
+                if gold_index is not None and gold_index < len(row) and row[gold_index]:
+                    record["gold"] = row[gold_index]
+                records[source_id] = record
     if not records:
         raise FetchError(f"BANKING77 が空: {directory}")
     return records
@@ -260,12 +294,16 @@ def load_esci(directory: Path) -> dict[str, dict[str, Any]]:
         source_id = str(row["example_id"])
         description = row.get("product_description")
         title = row.get("product_title")
-        records[source_id] = {
+        record: dict[str, Any] = {
             "source_id": source_id,
             "query": row["query"],
             "title": "" if title is None else str(title),
             "description": "" if description is None else str(description),
         }
+        label = row.get("esci_label")
+        if label is not None and str(label):
+            record["gold"] = label
+        records[source_id] = record
     if not records:
         raise FetchError(f"ESCI の英語（us）行が空: {directory}")
     return records
@@ -281,7 +319,11 @@ def load_sms_spam(directory: Path) -> dict[str, dict[str, Any]]:
         if not sep:
             raise FetchError(f"SMS 行がタブ区切りではない: {index}")
         source_id = str(index)
-        records[source_id] = {"source_id": source_id, "message": message}
+        records[source_id] = {
+            "source_id": source_id,
+            "message": message,
+            "gold": _label.strip(),
+        }
     if not records:
         raise FetchError(f"SMS Spam が空: {path}")
     return records

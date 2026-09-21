@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import Final
 
 OPENROUTER_BASE_URL: Final = "https://openrouter.ai/api"
@@ -18,10 +19,12 @@ SONNET_MODEL_ID: Final = "anthropic/claude-sonnet-5"
 
 LUNA_PROVIDER: Final = "OpenAI"
 SONNET_PROVIDER: Final = "Anthropic"
+LUNA_PROVIDERS: Final[tuple[str, ...]] = (LUNA_PROVIDER, "Azure")
+SONNET_PROVIDERS: Final[tuple[str, ...]] = (SONNET_PROVIDER, "Amazon Bedrock")
 
-CHAT_MODELS: Final[dict[str, str]] = {
-    LUNA_MODEL_ID: LUNA_PROVIDER,
-    SONNET_MODEL_ID: SONNET_PROVIDER,
+CHAT_MODELS: Final[dict[str, tuple[str, ...]]] = {
+    LUNA_MODEL_ID: LUNA_PROVIDERS,
+    SONNET_MODEL_ID: SONNET_PROVIDERS,
 }
 
 API_KEY_ENV: Final = "OPENROUTER_API_KEY"
@@ -39,20 +42,31 @@ DETERMINISM_SAMPLE_SIZE: Final = 10
 NONDETERMINISTIC_REPEATS: Final = 3
 
 
-def provider_routing(order: str) -> dict[str, object]:
+def _provider_names(order: str | Sequence[str]) -> tuple[str, ...]:
+    if isinstance(order, str):
+        names = (order,)
+    else:
+        names = tuple(order)
+    if not names:
+        raise ValueError("provider が空")
+    return names
+
+
+def provider_routing(order: str | Sequence[str]) -> dict[str, object]:
     """Chat Completions に必ず付けるプロバイダ固定。"""
     return {
-        "order": [order],
+        "order": list(_provider_names(order)),
         "allow_fallbacks": PROVIDER_ALLOW_FALLBACKS,
         "require_parameters": PROVIDER_REQUIRE_PARAMETERS,
         "data_collection": PROVIDER_DATA_COLLECTION,
     }
 
 
-def require_chat_pair(model: str, provider: str) -> None:
-    """Luna/OpenAI と Sonnet/Anthropic 以外は拒否する。"""
-    expected = CHAT_MODELS.get(model)
-    if expected is None:
+def require_chat_pair(model: str, provider: str | Sequence[str]) -> None:
+    """許可したモデルと、そのモデルの provider.order 以外は拒否する。"""
+    allowed = CHAT_MODELS.get(model)
+    if allowed is None:
         raise ValueError(f"未許可のモデル: {model}")
-    if provider != expected:
-        raise ValueError(f"{model} の provider は {expected} に固定")
+    extra = [name for name in _provider_names(provider) if name not in allowed]
+    if extra:
+        raise ValueError(f"{model} の provider は {list(allowed)} に固定")
