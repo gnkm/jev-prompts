@@ -215,14 +215,18 @@ def load_banking77(directory: Path) -> dict[str, dict[str, Any]]:
                 text_index = header.index("text")
             except ValueError as exc:
                 raise FetchError(f"BANKING77 に text 列が無い: {path}") from exc
+            gold_index = header.index("category") if "category" in header else None
             for index, row in enumerate(reader):
                 if not row:
                     continue
                 source_id = f"{split}:{index}"
-                records[source_id] = {
+                record: dict[str, Any] = {
                     "source_id": source_id,
                     "text": row[text_index],
                 }
+                if gold_index is not None and gold_index < len(row) and row[gold_index]:
+                    record["gold"] = row[gold_index]
+                records[source_id] = record
     if not records:
         raise FetchError(f"BANKING77 が空: {directory}")
     return records
@@ -260,12 +264,16 @@ def load_esci(directory: Path) -> dict[str, dict[str, Any]]:
         source_id = str(row["example_id"])
         description = row.get("product_description")
         title = row.get("product_title")
-        records[source_id] = {
+        record: dict[str, Any] = {
             "source_id": source_id,
             "query": row["query"],
             "title": "" if title is None else str(title),
             "description": "" if description is None else str(description),
         }
+        label = row.get("esci_label")
+        if label is not None and str(label):
+            record["gold"] = label
+        records[source_id] = record
     if not records:
         raise FetchError(f"ESCI の英語（us）行が空: {directory}")
     return records
@@ -281,7 +289,11 @@ def load_sms_spam(directory: Path) -> dict[str, dict[str, Any]]:
         if not sep:
             raise FetchError(f"SMS 行がタブ区切りではない: {index}")
         source_id = str(index)
-        records[source_id] = {"source_id": source_id, "message": message}
+        records[source_id] = {
+            "source_id": source_id,
+            "message": message,
+            "gold": _label.strip(),
+        }
     if not records:
         raise FetchError(f"SMS Spam が空: {path}")
     return records

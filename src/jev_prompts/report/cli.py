@@ -6,13 +6,18 @@
 
 from __future__ import annotations
 
+from datetime import date
 from pathlib import Path
 from typing import Annotated
 
+import httpx
 import typer
 
+from jev_prompts.clients import MissingApiKeyError
 from jev_prompts.config import BOOTSTRAP_REPLICATES, RESULTS_DIR
 from jev_prompts.report.errors import ReportError
+from jev_prompts.report.findings import write_findings
+from jev_prompts.report.prices import fetch_prices, write_prices
 from jev_prompts.report.write import write_report
 from jev_prompts.runners.cli import app
 from jev_prompts.runners.schema import LogSchemaError, read_published_records
@@ -41,3 +46,43 @@ def report_command(
     typer.echo(f"markdown: {written.markdown}")
     for path in written.figures:
         typer.echo(f"figure: {path}")
+
+
+@app.command("prices")
+def prices_command(
+    results_dir: ResultsDir = RESULTS_DIR,
+) -> None:
+    """OpenRouter 掲載単価と測定日を results/prices.md に書く。"""
+    try:
+        prices = fetch_prices()
+        path = write_prices(results_dir / "prices.md", prices, measured_on=date.today())
+    except (
+        MissingApiKeyError,
+        OSError,
+        ValueError,
+        httpx.HTTPError,
+        httpx.RequestError,
+    ) as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo(f"prices: {path}")
+
+
+@app.command("findings")
+def findings_command(
+    published: PublishedPath = RESULTS_DIR / "published.jsonl",
+    results_dir: ResultsDir = RESULTS_DIR,
+) -> None:
+    """H1〜H4 と A の誤答内訳を findings.md に書く。本文は出さない。"""
+    if not published.is_file():
+        typer.echo(f"公開行が無い: {published}", err=True)
+        raise typer.Exit(code=1)
+    try:
+        logs = read_published_records(published)
+        path = write_findings(
+            logs, results_dir / "findings.md", measured_on=date.today()
+        )
+    except (LogSchemaError, ReportError, OSError) as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo(f"findings: {path}")

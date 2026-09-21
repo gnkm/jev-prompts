@@ -231,6 +231,24 @@ def test_probabilities_required() -> None:
         )
 
 
+def test_run_experiment_skips_completed_pairs() -> None:
+    calls: list[tuple[str, str]] = []
+
+    def execute(case: RunCase, condition: str) -> RequestLog:
+        calls.append((case.case_id, condition))
+        return _log(case, condition)
+
+    local, _published = run_experiment(
+        CASES[:1],
+        execute,
+        conditions=("A", "B1"),
+        skip={(CASES[0].case_id, "A")},
+    )
+    assert calls == [(CASES[0].case_id, "B1")]
+    assert local.height == 1
+    assert local["condition"].to_list() == ["B1"]
+
+
 def test_execute_exception_becomes_error_row_with_probabilities() -> None:
     def execute(case: RunCase, condition: str) -> RequestLog:
         raise RuntimeError("boom")

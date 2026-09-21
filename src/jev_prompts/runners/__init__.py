@@ -7,6 +7,7 @@
 from jev_prompts.runners.experiment import (
     RunCase,
     as_run_case,
+    completed_pairs,
     iter_case_conditions,
     run_experiment,
 )
@@ -80,6 +81,7 @@ __all__ = [
     "check_determinism",
     "check_token_limits",
     "compare_fanout",
+    "completed_pairs",
     "drop_fanout_rows",
     "estimate_tokens",
     "eval_log_path",

@@ -162,6 +162,9 @@ def test_matching_hashes_pass(tmp_path: Path) -> None:
     choice = load_task_records(raw_root, "choice")
     score = load_task_records(raw_root, "score")
     noul = load_task_records(raw_root, "noul")
+    assert choice["test:0"]["gold"] == "card_arrival"
+    assert score["10"]["gold"] == "S"
+    assert noul["0"]["gold"] == "ham"
     write_ledger(
         pl.DataFrame(
             [

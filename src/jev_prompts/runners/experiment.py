@@ -6,7 +6,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterator, Mapping, Sequence
+from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -83,32 +83,47 @@ def iter_case_conditions(
             yield parsed, condition
 
 
+def completed_pairs(frame: pl.DataFrame) -> frozenset[tuple[str, str]]:
+    """再開用。(case_id, condition) の集合。"""
+    if frame.height == 0 or "case_id" not in frame.columns:
+        return frozenset()
+    if "condition" not in frame.columns:
+        return frozenset()
+    return frozenset(
+        zip(frame["case_id"].to_list(), frame["condition"].to_list(), strict=True)
+    )
+
+
 def run_experiment(
     cases: Sequence[RunCase | Mapping[str, Any]],
     execute: ExecuteFn,
     *,
     conditions: Sequence[str] | None = None,
+    skip: Iterable[tuple[str, str]] | None = None,
+    on_row: Callable[[RequestLog], None] | None = None,
 ) -> tuple[pl.DataFrame, pl.DataFrame]:
     """1 リクエスト 1 行のローカルログと、本文なしの公開行を返す。"""
+    seen = frozenset(skip) if skip is not None else frozenset()
     logs: list[RequestLog] = []
     for case, condition in iter_case_conditions(cases, conditions):
+        if (case.case_id, condition) in seen:
+            continue
         try:
             log = execute(case, condition)
         except Exception as exc:
-            logs.append(
-                RequestLog.failed(
-                    case_id=case.case_id,
-                    task=case.task,
-                    condition=condition,
-                    split=case.split,
-                    gold=case.gold,
-                    content_hash=case.content_hash,
-                    error=f"{type(exc).__name__}: {exc}",
-                )
+            log = RequestLog.failed(
+                case_id=case.case_id,
+                task=case.task,
+                condition=condition,
+                split=case.split,
+                gold=case.gold,
+                content_hash=case.content_hash,
+                error=f"{type(exc).__name__}: {exc}",
             )
-            continue
         if not isinstance(log, RequestLog):
             raise TypeError("execute は RequestLog を返す")
         logs.append(log)
+        if on_row is not None:
+            on_row(log)
     local = local_frame(logs)
     return local, to_published(local)

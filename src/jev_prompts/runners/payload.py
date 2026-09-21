@@ -18,7 +18,7 @@ from jev_prompts.data.fetch import (
     verify_ledgers,
 )
 from jev_prompts.data.ledger import read_ledger
-from jev_prompts.data.schema import TaskId
+from jev_prompts.data.schema import SPLITS, SplitId, TaskId
 from jev_prompts.prompts.catalog import PromptBundle
 from jev_prompts.runners.experiment import RunCase
 
@@ -38,9 +38,14 @@ def require_bodies(raw_root: Path, cases_root: Path) -> int:
 
 
 def load_run_cases(
-    raw_root: Path, cases_root: Path
+    raw_root: Path,
+    cases_root: Path,
+    *,
+    split: SplitId | None = None,
 ) -> list[tuple[RunCase, dict[str, Any]]]:
     """台帳と raw 本文を照合し、ケースとレコードを返す。"""
+    if split is not None and split not in SPLITS:
+        raise MissingBodyError(f"未知の split: {split}")
     require_bodies(raw_root, cases_root)
     cache: dict[TaskId, dict[str, dict[str, Any]]] = {}
     loaded: list[tuple[RunCase, dict[str, Any]]] = []
@@ -48,6 +53,8 @@ def load_run_cases(
         if path.stat().st_size == 0:
             continue
         for row in read_ledger(path).to_dicts():
+            if split is not None and row["split"] != split:
+                continue
             task = row["task"]
             if task not in cache:
                 cache[task] = load_task_records(raw_root, task)

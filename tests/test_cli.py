@@ -29,9 +29,11 @@ def test_help_lists_systemone_and_chat_model_ids() -> None:
     assert LUNA_MODEL_ID in result.stdout
     assert SONNET_MODEL_ID in result.stdout
     assert "fetch" in text
+    assert "extract" in text
     assert "preflight" in text
     assert "fanout" in text
     assert "report" in text
+    assert "findings" in text
 
 
 def test_module_help_subprocess() -> None:
@@ -148,10 +150,12 @@ def test_preflight_without_bodies_exits_nonzero(monkeypatch, tmp_path: Path) -> 
 def test_readme_splits_fetch_and_run() -> None:
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     assert "python -m jev_prompts fetch" in readme
+    assert "python -m jev_prompts extract" in readme
     assert "python -m jev_prompts preflight" in readme
     assert "python -m jev_prompts run" in readme
     assert "python -m jev_prompts fanout" in readme
     assert "scripts/fetch_data.py" in readme
+    assert "scripts/extract_cases.py" in readme
     prep = readme.index("準備")
     run = readme.index("実行", prep)
     fetch = readme.index("jev_prompts fetch")
