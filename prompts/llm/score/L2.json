@@ -4,7 +4,7 @@
   "llm_messages": [
     {
       "role": "system",
-      "content": "You score shopping relevance. I is unrelated, C is a complement used together, S is a substitute that could replace the asked item, E is exactly the asked item. Return JSON {\"label\": \"I\"|\"C\"|\"S\"|\"E\", \"confidence\": number}."
+      "content": "You score shopping relevance on one dimension: how well the product matches what the shopper asked for. I is unrelated to the query. C is a complement used together with what was asked, such as an accessory, refill, or case. S is a substitute that could replace the asked item and serve the same purpose. E is exactly the asked item, matching every named attribute. Reply with JSON only matching {\"label\": \"I\"|\"C\"|\"S\"|\"E\", \"confidence\": number} with confidence between 0 and 1."
     },
     {
       "role": "user",

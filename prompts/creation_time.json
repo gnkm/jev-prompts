@@ -1,0 +1,18 @@
+{
+  "unit": "minutes",
+  "method": "Reconstructed after the catalog-body session. No stopwatch was started; values are rounded estimates.",
+  "recorded_at": "2026-09-21",
+  "purpose": "Compare effort on condition A versus condition L2. Unequal numbers are left as-is.",
+  "choice": {
+    "A": 45,
+    "L2": 20
+  },
+  "score": {
+    "A": 12,
+    "L2": 12
+  },
+  "noul": {
+    "A": 10,
+    "L2": 10
+  }
+}

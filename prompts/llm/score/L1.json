@@ -4,7 +4,7 @@
   "llm_messages": [
     {
       "role": "user",
-      "content": "Rate product relevance for the query as I, C, S, or E. Reply with JSON {\"label\": \"...\", \"confidence\": 0.0}.\nQuery: {{query}}\nProduct: {{product}}"
+      "content": "Rate product relevance for the query as I, C, S, or E. Reply with JSON only matching {\"label\": \"I\"|\"C\"|\"S\"|\"E\", \"confidence\": number} with confidence between 0 and 1.\nQuery: {{query}}\nProduct: {{product}}"
     }
   ]
 }

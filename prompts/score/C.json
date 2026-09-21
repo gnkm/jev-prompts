@@ -7,8 +7,14 @@
       "title": "",
       "description": ""
     },
-    "bullet_points": ["placeholder feature list"],
+    "bullet_points": [
+      "placeholder feature list",
+      "packaging may vary",
+      "imported accessory kit sold separately"
+    ],
     "brand": "",
+    "color": "",
+    "locale": "en-US",
     "other_candidates": [
       {
         "title": "related item 1",
