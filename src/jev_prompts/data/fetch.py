@@ -70,6 +70,7 @@ class RemoteFile:
     relative_path: str
     kind: Literal["file", "zip"]
     lfs_repo: str | None = None
+    fallback_urls: tuple[str, ...] = ()
 
 
 REMOTE_FILES: tuple[RemoteFile, ...] = (
@@ -111,6 +112,10 @@ REMOTE_FILES: tuple[RemoteFile, ...] = (
         url="https://archive.ics.uci.edu/static/public/228/sms+spam+collection.zip",
         relative_path="sms_spam",
         kind="zip",
+        fallback_urls=(
+            "https://raw.githubusercontent.com/justmarkham/pycon-2016-tutorial/"
+            "master/data/sms.tsv",
+        ),
     ),
 )
 
@@ -135,16 +140,41 @@ def fetch_datasets(raw_root: Path, *, transport: Transport | None = None) -> lis
     written: list[Path] = []
     for remote in REMOTE_FILES:
         dest = raw_root / remote.relative_path
-        payload = _download(client, remote)
-        if remote.kind == "zip":
-            dest.mkdir(parents=True, exist_ok=True)
-            _extract_zip(payload, dest)
-            written.append(dest)
-            continue
-        dest.parent.mkdir(parents=True, exist_ok=True)
-        dest.write_bytes(payload)
+        _store_remote(client, remote, dest)
         written.append(dest)
     return written
+
+
+def _store_remote(transport: Transport, remote: RemoteFile, dest: Path) -> None:
+    try:
+        payload = _download(transport, remote)
+    except FetchError as exc:
+        _store_fallback(transport, remote, dest, exc)
+        return
+    if remote.kind == "zip":
+        dest.mkdir(parents=True, exist_ok=True)
+        _extract_zip(payload, dest)
+        return
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.write_bytes(payload)
+
+
+def _store_fallback(
+    transport: Transport, remote: RemoteFile, dest: Path, cause: FetchError
+) -> None:
+    if not remote.fallback_urls:
+        raise cause
+    errors = [str(cause)]
+    for url in remote.fallback_urls:
+        try:
+            payload = transport.get(url)
+        except FetchError as exc:
+            errors.append(str(exc))
+            continue
+        dest.mkdir(parents=True, exist_ok=True)
+        (dest / "SMSSpamCollection").write_bytes(payload)
+        return
+    raise FetchError("; ".join(errors)) from cause
 
 
 def verify_ledgers(raw_root: Path, cases_root: Path) -> int:

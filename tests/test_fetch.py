@@ -300,6 +300,17 @@ def test_lfs_pointer_is_resolved(tmp_path: Path) -> None:
     assert records["10"]["query"] == "running shoes"
 
 
+def test_sms_fallback_when_uci_fails(tmp_path: Path) -> None:
+    payloads = _remote_payloads()
+    del payloads[_url_ending("sms+spam+collection.zip")]
+    fallback = REMOTE_FILES[-1].fallback_urls[0]
+    payloads[fallback] = b"ham\tsee you at 7\nspam\tWIN a prize now\n"
+    fetch_datasets(tmp_path / "raw", transport=FakeTransport(payloads))
+    records = load_task_records(tmp_path / "raw", "noul")
+    assert records["0"]["gold"] == "ham"
+    assert records["1"]["gold"] == "spam"
+
+
 def test_git_ignores_data_raw_bodies() -> None:
     gitignore = (REPO_ROOT / ".gitignore").read_text(encoding="utf-8")
     assert "data/raw/" in gitignore
