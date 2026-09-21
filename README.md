@@ -10,7 +10,7 @@ Jev に 3 つの課題を与え、精度の評価をおこなう。
 表の処理は Polars を使う。
 
 Python パッケージ `jev_prompts` の骨格（uv / pytest / Ruff / Typer / Polars）はある。CLI と集計の本実装は後続。
-GitHub Actions は Biome、pytest、Ruff を `main` と pull request で実行する。ライブ API は既定の CI に載せない。
+GitHub Actions は Biome、pytest、Ruff、reuse lint を `main` と pull request で実行する。ライブ API は既定の CI に載せない。
 
 ## セットアップ
 
@@ -27,6 +27,7 @@ uv sync
 uv run pytest
 uv run ruff check .
 uv run ruff format --check .
+uv run reuse lint
 ```
 
 ## 比較用 LLM
@@ -54,11 +55,12 @@ OpenRouter で呼び、`provider.order` を上表のプロバイダに固定す�
 
 ## ライセンス
 
-ディレクトリごとにライセンスが異なります。具体的には以下のとおりです。
+ディレクトリごとにライセンスが異なります。REUSE の SPDX 識別子をファイルに付け、全文は `LICENSES/` に置きます。検証は `uv run reuse lint` です。
 
-- src/: MIT
-- prompts/: CC0 1.0
-- results/: CC BY 4.0
+- `src/`: MIT
+- `prompts/`: CC0-1.0
+- `results/`: CC-BY-4.0
 
+その他のリポジトリファイル（テスト、ドキュメント、設定など）は MIT です。
 GitHub のサイドバーはルートの MIT のみを表示しますが、MIT が全体に及ぶわけではありません。
 元データは同梱しておらず、各データセットのライセンスは `DATA_LICENSES.md` を参照ください。

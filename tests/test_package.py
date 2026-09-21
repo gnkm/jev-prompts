@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 gnkm
+#
+# SPDX-License-Identifier: MIT
+
 """パッケージと実行時依存が import できること。"""
 
 import polars as pl

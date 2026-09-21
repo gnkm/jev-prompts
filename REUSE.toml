@@ -1,0 +1,22 @@
+version = 1
+
+# ディレクトリ境界は 01-seed / README に合わせる。
+# src/ はヘッダーも付ける。ヘッダーが無いファイルはここで MIT。
+# 同一ファイルに複数テーブルがマッチしたら最後だけが使われる。
+[[annotations]]
+path = ["**"]
+precedence = "closest"
+SPDX-FileCopyrightText = "2026 gnkm"
+SPDX-License-Identifier = "MIT"
+
+[[annotations]]
+path = ["prompts/**"]
+precedence = "override"
+SPDX-FileCopyrightText = "2026 gnkm"
+SPDX-License-Identifier = "CC0-1.0"
+
+[[annotations]]
+path = ["results/**"]
+precedence = "override"
+SPDX-FileCopyrightText = "2026 gnkm"
+SPDX-License-Identifier = "CC-BY-4.0"
