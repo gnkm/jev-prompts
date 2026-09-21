@@ -9,7 +9,7 @@ Jev に 3 つの課題を与え、精度の評価をおこなう。
 図が必要な箇所は画像を生成してそのファイルから参照する。Web UI は提供しない。
 表の処理は Polars を使う。
 
-Python パッケージ `jev_prompts` の骨格（uv / pytest / Ruff / Typer / Polars）と、ケースネストの実験ランナー、指標の Polars 集計がある。検定（McNemar / ブートストラップ / Holm）の本実装は後続。
+Python パッケージ `jev_prompts` の骨格（uv / pytest / Ruff / Typer / Polars）と、ケースネストの実験ランナー、指標の Polars 集計、対応あり検定（McNemar / ブートストラップ 95% CI / Holm）がある。
 入口は `python -m jev_prompts`（Typer）。準備は `fetch`、実行は `preflight` / `run` / `fanout` で切り分ける。ロジックは `jev_prompts` に置き、`scripts/` は薄い入口である。
 パッケージは `report → stats → metrics → runners → prompts → clients → data → config` の一方向レイヤで、Import Linter が逆向きの import を止める。
 複雑度は Radon が測り、Xenon が `pyproject.toml` の閾値で CI を落とす。緩める変更は CODEOWNERS 対象。
@@ -172,7 +172,7 @@ Jev 用の呼び出しに Chat Completions の URL は使わない。`~typesafe/
 
 ## 評価の統計
 
-同じケースを条件 A 対 B1 のように 2 条件で比べるときは、当たり外れの差に McNemar、指標の幅にブートストラップ、複数回の判定に Holm を使う。解説は [docs/statistical-methods.md](docs/statistical-methods.md)、位置づけは [ARCHITECTURE.md](ARCHITECTURE.md) の統計節。
+同じケースを条件 A 対 B1 のように 2 条件で比べるときは、当たり外れの差に McNemar、指標の幅にブートストラップ（10,000 回・95% CI）、A 対各条件の多重比較に Holm を使う。独立 2 標本は使わない。p 値だけではなく差と区間を出す。入口は `jev_prompts.stats.compare_paired`。解説は [docs/statistical-methods.md](docs/statistical-methods.md)、位置づけは [ARCHITECTURE.md](ARCHITECTURE.md) の統計節。
 
 ## コントリビューション
 

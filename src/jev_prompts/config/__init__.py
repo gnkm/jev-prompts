@@ -37,12 +37,21 @@ from jev_prompts.config.paths import (
     REPO_ROOT,
     RESULTS_DIR,
 )
+from jev_prompts.config.stats import (
+    BASELINE_CONDITION,
+    BOOTSTRAP_REPLICATES,
+    CI_LEVEL,
+    STATS_SEED,
+)
 
 __all__ = [
     "API_KEY_ENV",
+    "BASELINE_CONDITION",
+    "BOOTSTRAP_REPLICATES",
     "CASES_DIR",
     "CHAT_COMPLETIONS_PATH",
     "CHAT_MODELS",
+    "CI_LEVEL",
     "CONFIDENT_THRESHOLD",
     "CONTEXT_WINDOW_TOKENS",
     "DETERMINISM_SAMPLE_SIZE",
@@ -63,6 +72,7 @@ __all__ = [
     "RESULTS_DIR",
     "SONNET_MODEL_ID",
     "SONNET_PROVIDER",
+    "STATS_SEED",
     "SYSTEMONE_PATH",
     "provider_routing",
     "require_chat_pair",

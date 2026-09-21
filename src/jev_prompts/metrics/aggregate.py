@@ -69,7 +69,7 @@ def aggregate_metrics(logs: pl.DataFrame) -> pl.DataFrame:
 
     合格ライン（A 対 B1 の差など）は列にもアサーションにもしない。
     """
-    prepared = _prepare(logs)
+    prepared = prepare_cases(logs)
     if prepared.height == 0:
         return pl.DataFrame(schema=_result_schema())
 
@@ -118,7 +118,8 @@ def _result_schema() -> dict[str, pl.DataType]:
     }
 
 
-def _prepare(logs: pl.DataFrame) -> pl.DataFrame:
+def prepare_cases(logs: pl.DataFrame) -> pl.DataFrame:
+    """ケース単位の pred / correct を付ける。集計と対応あり検定の共通前処理。"""
     cols = set(logs.columns)
     missing = [name for name in _REQUIRED if name not in cols]
     if missing:

@@ -9,6 +9,7 @@ from jev_prompts.metrics.aggregate import (
     METRIC_COLUMNS,
     MetricsError,
     aggregate_metrics,
+    prepare_cases,
 )
 
 __all__ = [
@@ -16,4 +17,5 @@ __all__ = [
     "METRIC_COLUMNS",
     "MetricsError",
     "aggregate_metrics",
+    "prepare_cases",
 ]
