@@ -19,8 +19,10 @@ build-backend = "hatchling.build"
 dev = [
     "import-linter>=2.15",
     "pytest>=8",
+    "radon>=6.0.1",
     "reuse>=5",
     "ruff>=0.9",
+    "xenon>=0.9.3",
 ]
 
 [tool.pytest.ini_options]
@@ -49,6 +51,18 @@ select = [
 
 [tool.ruff.lint.isort]
 known-first-party = ["jev_prompts"]
+
+# 複雑度ゲートの正本。Xenon 0.9.3 は pyproject を読まないため
+# scripts/check_complexity.py がここを読んで実行する。緩める変更は CODEOWNERS 対象。
+[tool.xenon]
+max_absolute = "C"
+max_modules = "B"
+max_average = "A"
+paths = ["src", "scripts", "tests"]
+
+[tool.radon]
+cc_min = "A"
+show_complexity = true
 
 [tool.importlinter]
 root_package = "jev_prompts"
