@@ -167,6 +167,46 @@ def test_to_published_drops_body_and_keeps_probabilities(tmp_path: Path) -> None
     assert "probabilities" in pub_text
 
 
+def _sample_frames() -> tuple[pl.DataFrame, pl.DataFrame]:
+    def execute(case: RunCase, condition: str) -> RequestLog:
+        return _log(case, condition)
+
+    return run_experiment(CASES[:1], execute, conditions=("A",))
+
+
+@pytest.mark.parametrize(
+    ("raw", "match"),
+    [
+        ("not-json", "JSON ではない"),
+        ("[0.8, 0.2]", "オブジェクト"),
+        ('{"ham": "high"}', "数値ではない"),
+        ('{"ham": true}', "数値ではない"),
+        ("null", "必須"),
+        ("1", "オブジェクト"),
+    ],
+)
+def test_write_rejects_invalid_probabilities(
+    tmp_path: Path, raw: str, match: str
+) -> None:
+    local, published = _sample_frames()
+    dirty_local = local.with_columns(pl.lit(raw).alias("probabilities"))
+    dirty_published = published.with_columns(pl.lit(raw).alias("probabilities"))
+    with pytest.raises(LogSchemaError, match=match):
+        write_local_logs(dirty_local, tmp_path / "local.jsonl")
+    with pytest.raises(LogSchemaError, match=match):
+        write_published_records(dirty_published, tmp_path / "published.jsonl")
+    assert not (tmp_path / "local.jsonl").exists()
+    assert not (tmp_path / "published.jsonl").exists()
+
+
+def test_write_accepts_numeric_probability_object(tmp_path: Path) -> None:
+    local, published = _sample_frames()
+    write_local_logs(local, tmp_path / "local.jsonl")
+    write_published_records(published, tmp_path / "published.jsonl")
+    assert (tmp_path / "local.jsonl").is_file()
+    assert (tmp_path / "published.jsonl").is_file()
+
+
 def test_probabilities_required() -> None:
     case = CASES[0]
     with pytest.raises(TypeError):

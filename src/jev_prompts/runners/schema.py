@@ -102,11 +102,7 @@ class RequestLog:
             raise LogSchemaError(f"未知の condition: {self.condition}")
         if self.split not in SPLITS:
             raise LogSchemaError(f"未知の split: {self.split}")
-        if not isinstance(self.probabilities, dict):
-            raise LogSchemaError("probabilities は必須のオブジェクト")
-        for key, value in self.probabilities.items():
-            if isinstance(value, bool) or not isinstance(value, int | float):
-                raise LogSchemaError(f"probabilities.{key} が数値ではない")
+        _parse_probabilities(self.probabilities)
 
     @classmethod
     def failed(
@@ -146,22 +142,43 @@ def _json_cell(value: Any) -> str | None:
     return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
 
 
-def _require_probabilities_cell(raw: Any) -> str:
+def _parse_probabilities(raw: Any) -> dict[str, float]:
+    """JSON オブジェクトで値がすべて数値。null・配列・非数値は拒否する。"""
     if raw is None:
         raise LogSchemaError("probabilities は必須")
     if isinstance(raw, str):
         try:
-            parsed = json.loads(raw)
+            parsed: Any = json.loads(raw)
         except json.JSONDecodeError as exc:
             raise LogSchemaError("probabilities が JSON ではない") from exc
-        if not isinstance(parsed, dict):
-            raise LogSchemaError("probabilities は必須のオブジェクト")
-        return json.dumps(
-            parsed, ensure_ascii=False, sort_keys=True, separators=(",", ":")
-        )
-    if not isinstance(raw, dict):
+    else:
+        parsed = raw
+    if parsed is None:
+        raise LogSchemaError("probabilities は必須")
+    if not isinstance(parsed, dict):
         raise LogSchemaError("probabilities は必須のオブジェクト")
-    return json.dumps(raw, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    out: dict[str, float] = {}
+    for key, value in parsed.items():
+        if isinstance(value, bool) or not isinstance(value, int | float):
+            raise LogSchemaError(f"probabilities.{key} が数値ではない")
+        out[str(key)] = float(value)
+    return out
+
+
+def _require_probabilities_cell(raw: Any) -> str:
+    parsed = _parse_probabilities(raw)
+    return json.dumps(parsed, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+
+
+def _validate_probabilities_column(df: pl.DataFrame) -> None:
+    if "probabilities" not in df.columns:
+        raise LogSchemaError("probabilities は必須")
+    if df.height == 0:
+        return
+    if df["probabilities"].null_count() > 0:
+        raise LogSchemaError("probabilities は必須")
+    for value in df["probabilities"].to_list():
+        _parse_probabilities(value)
 
 
 def request_log_row(log: RequestLog) -> dict[str, Any]:
@@ -228,10 +245,7 @@ def validate_local_logs(df: pl.DataFrame) -> None:
     extra = sorted(cols - set(REQUEST_LOG_COLUMNS))
     if extra:
         raise LogSchemaError(f"ローカルログの未知の列: {', '.join(extra)}")
-    if "probabilities" not in cols:
-        raise LogSchemaError("probabilities は必須")
-    if df.height > 0 and df["probabilities"].null_count() > 0:
-        raise LogSchemaError("probabilities は必須")
+    _validate_probabilities_column(df)
 
 
 def validate_published_records(df: pl.DataFrame) -> None:
@@ -247,10 +261,7 @@ def validate_published_records(df: pl.DataFrame) -> None:
     extra = sorted(cols - set(PUBLISHED_COLUMNS))
     if extra:
         raise LogSchemaError(f"公開行の未知の列: {', '.join(extra)}")
-    if "probabilities" not in cols:
-        raise LogSchemaError("probabilities は必須")
-    if df.height > 0 and df["probabilities"].null_count() > 0:
-        raise LogSchemaError("probabilities は必須")
+    _validate_probabilities_column(df)
 
 
 def write_local_logs(df: pl.DataFrame, path: Path) -> None:
