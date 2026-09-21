@@ -143,6 +143,19 @@ def test_write_report_replaces_stale_figures(tmp_path: Path) -> None:
     assert (dest / "figures" / "reliability-choice.svg").is_file()
 
 
+def test_failed_write_keeps_existing_outputs(tmp_path: Path) -> None:
+    dest = tmp_path / "results"
+    written = write_report(local_frame(_choice_logs()), dest, n_bootstrap=N_BOOT)
+    md = written.markdown.read_text(encoding="utf-8")
+    fig = (dest / "figures" / "reliability-choice.svg").read_text(encoding="utf-8")
+    with pytest.raises(ReportError, match="n_bootstrap"):
+        write_report(local_frame(_choice_logs()), dest, n_bootstrap=0)
+    assert written.markdown.read_text(encoding="utf-8") == md
+    assert (dest / "figures" / "reliability-choice.svg").read_text(
+        encoding="utf-8"
+    ) == fig
+
+
 def test_calibration_has_ten_bins_and_ece() -> None:
     table = calibration_table(local_frame(_choice_logs()))
     a = table.filter(pl.col("condition") == "A")

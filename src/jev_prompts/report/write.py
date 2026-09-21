@@ -6,6 +6,9 @@
 
 from __future__ import annotations
 
+import shutil
+import tempfile
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -21,6 +24,8 @@ from jev_prompts.report.plots import write_task_figures
 from jev_prompts.report.render import render_report
 from jev_prompts.runners.fanout import drop_fanout_rows
 from jev_prompts.runners.schema import REQUEST_LOG_COLUMNS, to_published
+
+_MANAGED_FIGURE_PREFIXES = ("reliability-", "cost-accuracy-")
 
 
 @dataclass(frozen=True, slots=True)
@@ -39,9 +44,32 @@ def write_report(
 ) -> WrittenReport:
     """指標マトリクス・較正・コスト×精度を markdown と図に書く。"""
     dest = dest.resolve()
-    figures_dir = dest / "figures"
+    dest.mkdir(parents=True, exist_ok=True)
+    staging = Path(tempfile.mkdtemp(prefix=".report-staging-", dir=dest))
+    try:
+        markdown, figures = _build_report(
+            logs,
+            staging,
+            n_bootstrap=n_bootstrap,
+            ci_level=ci_level,
+            seed=seed,
+        )
+        installed_md, installed_figs = _install_report(dest, markdown, figures)
+    finally:
+        shutil.rmtree(staging, ignore_errors=True)
+    return WrittenReport(markdown=installed_md, figures=tuple(installed_figs))
+
+
+def _build_report(
+    logs: pl.DataFrame,
+    staging: Path,
+    *,
+    n_bootstrap: int,
+    ci_level: float,
+    seed: int,
+) -> tuple[Path, list[Path]]:
+    figures_dir = staging / "figures"
     figures_dir.mkdir(parents=True, exist_ok=True)
-    _clear_managed_figures(figures_dir)
     frame = _public_logs(logs)
     metrics = aggregate_metrics(frame)
     intervals = metric_intervals(
@@ -54,25 +82,46 @@ def write_report(
         intervals=intervals,
         calib=calib,
         figures=figures,
-        dest=dest,
+        dest=staging,
     )
     reject_forbidden_text(text, source="report.md")
-    markdown = dest / "report.md"
+    markdown = staging / "report.md"
     markdown.write_text(text, encoding="utf-8")
     reject_forbidden_files((markdown, *figures))
-    return WrittenReport(markdown=markdown, figures=tuple(figures))
+    return markdown, figures
 
 
-_MANAGED_FIGURE_PREFIXES = ("reliability-", "cost-accuracy-")
+def _install_report(
+    dest: Path, markdown: Path, figures: Iterable[Path]
+) -> tuple[Path, list[Path]]:
+    figures_dir = dest / "figures"
+    figures_dir.mkdir(parents=True, exist_ok=True)
+    installed = [_replace_file(src, figures_dir / src.name) for src in figures]
+    published = _replace_file(markdown, dest / "report.md")
+    keep = {path.name for path in installed}
+    _clear_managed_figures(figures_dir, keep=keep)
+    return published, installed
 
 
-def _clear_managed_figures(dest: Path) -> None:
-    """前回の課題の図が公開ディレクトリに残らないようにする。"""
+def _replace_file(src: Path, dest: Path) -> Path:
+    part = dest.with_name(f".{dest.name}.part")
+    shutil.copy2(src, part)
+    part.replace(dest)
+    return dest
+
+
+def _clear_managed_figures(dest: Path, *, keep: set[str]) -> None:
+    """今回書いていない管理対象図だけを消す。"""
     if not dest.is_dir():
         return
     for path in dest.iterdir():
         managed = path.name.startswith(_MANAGED_FIGURE_PREFIXES)
-        if path.is_file() and path.suffix == ".svg" and managed:
+        if (
+            path.is_file()
+            and path.suffix == ".svg"
+            and managed
+            and path.name not in keep
+        ):
             path.unlink()
 
 
