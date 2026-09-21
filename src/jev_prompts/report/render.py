@@ -69,7 +69,7 @@ def _task_section(
         "",
         "### 条件 × 指標",
         "",
-        _matrix_table(metrics, intervals, primary),
+        _matrix_table(task, metrics, intervals, primary),
         "",
         "### 較正",
         "",
@@ -86,56 +86,71 @@ def _task_section(
     ]
 
 
-def _matrix_table(metrics: pl.DataFrame, intervals: pl.DataFrame, primary: str) -> str:
-    frame = _with_primary_ci(metrics, intervals, primary)
-    columns = [
-        "condition",
-        "n",
-        primary,
-        "primary_ci",
-        "confident_error_rate",
-        "ece",
-        "tokens_per_1000",
-        "latency_p50_ms",
-        "latency_p95_ms",
-    ]
+def _matrix_table(
+    task: str, metrics: pl.DataFrame, intervals: pl.DataFrame, primary: str
+) -> str:
+    frame = _attach_ci(metrics, intervals, primary, "primary_ci")
+    columns = ["condition", "n", "n_primary", "error_rate", primary, "primary_ci"]
     labels = {"primary_ci": f"{primary} CI"}
+    formatters: dict[str, object] = {
+        "n": fmt_int,
+        "n_primary": fmt_int,
+        "error_rate": fmt_float,
+        primary: fmt_float,
+        "confident_error_rate": fmt_float,
+        "ece": fmt_float,
+        "tokens_per_1000": fmt_float,
+        "latency_p50_ms": fmt_float,
+        "latency_p95_ms": fmt_float,
+    }
+    if task == "score":
+        frame = _attach_ci(frame, intervals, "spearman", "spearman_ci")
+        columns.extend(["spearman", "spearman_ci"])
+        labels["spearman_ci"] = "spearman CI"
+        formatters["spearman"] = fmt_float
+    columns.extend(
+        [
+            "confident_error_rate",
+            "ece",
+            "tokens_per_1000",
+            "latency_p50_ms",
+            "latency_p95_ms",
+        ]
+    )
     return markdown_table(
         _sort_conditions(frame),
         columns,
         labels=labels,
-        formatters={
-            "n": fmt_int,
-            primary: fmt_float,
-            "confident_error_rate": fmt_float,
-            "ece": fmt_float,
-            "tokens_per_1000": fmt_float,
-            "latency_p50_ms": fmt_float,
-            "latency_p95_ms": fmt_float,
-        },
+        formatters=formatters,
     )
 
 
-def _with_primary_ci(
-    metrics: pl.DataFrame, intervals: pl.DataFrame, primary: str
+def _attach_ci(
+    metrics: pl.DataFrame, intervals: pl.DataFrame, metric: str, alias: str
 ) -> pl.DataFrame:
+    empty = metrics.with_columns(pl.lit("").alias(alias))
     if intervals.height == 0:
-        return metrics.with_columns(pl.lit("").alias("primary_ci"))
-    subset = intervals.filter(pl.col("metric") == primary).select(
+        return empty
+    subset = intervals.filter(pl.col("metric") == metric)
+    if subset.height == 0:
+        return empty
+    renamed = subset.select(
         "task",
         "condition",
         "split",
-        pl.col("ci_low"),
-        pl.col("ci_high"),
+        pl.col("ci_low").alias(f"{alias}_lo"),
+        pl.col("ci_high").alias(f"{alias}_hi"),
     )
-    joined = metrics.join(subset, on=["task", "condition", "split"], how="left")
+    joined = metrics.join(renamed, on=["task", "condition", "split"], how="left")
     cis = [
         fmt_ci(low, high)
         for low, high in zip(
-            joined["ci_low"].to_list(), joined["ci_high"].to_list(), strict=True
+            joined[f"{alias}_lo"].to_list(),
+            joined[f"{alias}_hi"].to_list(),
+            strict=True,
         )
     ]
-    return joined.with_columns(pl.Series("primary_ci", cis))
+    return joined.with_columns(pl.Series(alias, cis)).drop(f"{alias}_lo", f"{alias}_hi")
 
 
 def _calibration_md(calib: pl.DataFrame) -> str:

@@ -107,9 +107,40 @@ def test_write_report_links_figures_and_omits_body(tmp_path: Path) -> None:
     assert (dest / "figures/reliability-choice.svg").is_file()
     assert (dest / "figures/cost-accuracy-choice.svg").is_file()
     assert "top1" in text
+    assert "error_rate" in text
+    assert "n_primary" in text
     assert "ECE" in text or "ece" in text
     assert "tokens_per_1000" in text
     _scan_public([written.markdown, *written.figures])
+
+
+def _score_logs() -> list[RequestLog]:
+    # gold 順位 1,2,3,4 / score 0.1,2.0,1.0,3.0 → Spearman 0.8
+    pairs = ((0, 0.1), (1, 2.0), (2, 1.0), (3, 3.0))
+    return [
+        _log(case_id=f"s{i}", task="score", gold=gold, answer=answer)
+        for i, (gold, answer) in enumerate(pairs)
+    ]
+
+
+def test_matrix_includes_error_rate_n_primary_and_spearman(tmp_path: Path) -> None:
+    text = write_report(
+        local_frame(_score_logs()), tmp_path / "out", n_bootstrap=N_BOOT
+    ).markdown.read_text(encoding="utf-8")
+    assert "error_rate" in text
+    assert "n_primary" in text
+    assert "spearman" in text
+    assert "0.800" in text
+
+
+def test_write_report_replaces_stale_figures(tmp_path: Path) -> None:
+    dest = tmp_path / "results"
+    stale = dest / "figures" / "reliability-score.svg"
+    stale.parent.mkdir(parents=True)
+    stale.write_text("<svg>old</svg>", encoding="utf-8")
+    write_report(local_frame(_choice_logs()), dest, n_bootstrap=N_BOOT)
+    assert not stale.exists()
+    assert (dest / "figures" / "reliability-choice.svg").is_file()
 
 
 def test_calibration_has_ten_bins_and_ece() -> None:

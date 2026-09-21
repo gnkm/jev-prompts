@@ -41,6 +41,7 @@ def write_report(
     dest = dest.resolve()
     figures_dir = dest / "figures"
     figures_dir.mkdir(parents=True, exist_ok=True)
+    _clear_managed_figures(figures_dir)
     frame = _public_logs(logs)
     metrics = aggregate_metrics(frame)
     intervals = metric_intervals(
@@ -60,6 +61,19 @@ def write_report(
     markdown.write_text(text, encoding="utf-8")
     reject_forbidden_files((markdown, *figures))
     return WrittenReport(markdown=markdown, figures=tuple(figures))
+
+
+_MANAGED_FIGURE_PREFIXES = ("reliability-", "cost-accuracy-")
+
+
+def _clear_managed_figures(dest: Path) -> None:
+    """前回の課題の図が公開ディレクトリに残らないようにする。"""
+    if not dest.is_dir():
+        return
+    for path in dest.iterdir():
+        managed = path.name.startswith(_MANAGED_FIGURE_PREFIXES)
+        if path.is_file() and path.suffix == ".svg" and managed:
+            path.unlink()
 
 
 def _public_logs(logs: pl.DataFrame) -> pl.DataFrame:

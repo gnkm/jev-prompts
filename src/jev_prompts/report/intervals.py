@@ -97,33 +97,72 @@ def _group_intervals(
 
 def _targets(frame: pl.DataFrame) -> list[tuple[str, list[object], Stat]]:
     task = str(frame["task"][0])
-    out: list[tuple[str, list[object], Stat]] = []
-    primary = _primary_target(frame, task)
-    if primary is not None:
-        out.append(primary)
+    out = _task_targets(frame, task)
+    out.append(("error_rate", frame["has_error"].to_list(), mean_binary))
     out.append(
         ("confident_error_rate", frame["confident_error"].to_list(), mean_binary)
     )
     return out
 
 
-def _primary_target(
+def _task_targets(
     frame: pl.DataFrame, task: str
-) -> tuple[str, list[object], Stat] | None:
+) -> list[tuple[str, list[object], Stat]]:
     if task == "choice":
-        return ("top1", frame["correct"].to_list(), mean_binary)
+        return [("top1", frame["correct"].to_list(), mean_binary)]
     valid = frame.filter(pl.col("primary_valid"))
     if task == "score":
         pairs = list(
             zip(valid["pred"].to_list(), valid["gold_score"].to_list(), strict=True)
         )
-        return ("mae", pairs, mean_abs_error)
+        return [("mae", pairs, mean_abs_error), ("spearman", pairs, _spearman)]
     if task == "noul":
         pairs = list(
             zip(valid["pred"].to_list(), valid["gold_yes"].to_list(), strict=True)
         )
-        return ("auc", pairs, pairwise_auc)
-    return None
+        return [("auc", pairs, pairwise_auc)]
+    return []
+
+
+def _spearman(pairs: Sequence[object]) -> float | None:
+    xs: list[float] = []
+    ys: list[float] = []
+    for item in pairs:
+        pred, gold = item  # type: ignore[misc]
+        if pred is None or gold is None:
+            continue
+        xs.append(float(pred))
+        ys.append(float(gold))
+    if len(xs) < 2:
+        return None
+    return _pearson(_ranks(xs), _ranks(ys))
+
+
+def _ranks(values: Sequence[float]) -> list[float]:
+    order = sorted(range(len(values)), key=lambda index: values[index])
+    ranks = [0.0] * len(values)
+    start = 0
+    while start < len(order):
+        end = start + 1
+        while end < len(order) and values[order[end]] == values[order[start]]:
+            end += 1
+        avg = (start + end + 1) / 2.0
+        for pos in order[start:end]:
+            ranks[pos] = avg
+        start = end
+    return ranks
+
+
+def _pearson(xs: Sequence[float], ys: Sequence[float]) -> float | None:
+    n = len(xs)
+    mean_x = sum(xs) / n
+    mean_y = sum(ys) / n
+    num = sum((x - mean_x) * (y - mean_y) for x, y in zip(xs, ys, strict=True))
+    den_x = sum((x - mean_x) ** 2 for x in xs)
+    den_y = sum((y - mean_y) ** 2 for y in ys)
+    if den_x == 0.0 or den_y == 0.0:
+        return None
+    return num / (den_x**0.5 * den_y**0.5)
 
 
 def _resample(
