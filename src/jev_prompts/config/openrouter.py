@@ -19,6 +19,11 @@ SONNET_MODEL_ID: Final = "anthropic/claude-sonnet-5"
 LUNA_PROVIDER: Final = "OpenAI"
 SONNET_PROVIDER: Final = "Anthropic"
 
+CHAT_MODELS: Final[dict[str, str]] = {
+    LUNA_MODEL_ID: LUNA_PROVIDER,
+    SONNET_MODEL_ID: SONNET_PROVIDER,
+}
+
 API_KEY_ENV: Final = "OPENROUTER_API_KEY"
 
 PROVIDER_ALLOW_FALLBACKS: Final = False
@@ -39,3 +44,12 @@ def provider_routing(order: str) -> dict[str, object]:
         "require_parameters": PROVIDER_REQUIRE_PARAMETERS,
         "data_collection": PROVIDER_DATA_COLLECTION,
     }
+
+
+def require_chat_pair(model: str, provider: str) -> None:
+    """Luna/OpenAI と Sonnet/Anthropic 以外は拒否する。"""
+    expected = CHAT_MODELS.get(model)
+    if expected is None:
+        raise ValueError(f"未許可のモデル: {model}")
+    if provider != expected:
+        raise ValueError(f"{model} の provider は {expected} に固定")

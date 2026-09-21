@@ -7,6 +7,7 @@
 from jev_prompts.config.openrouter import (
     API_KEY_ENV,
     CHAT_COMPLETIONS_PATH,
+    CHAT_MODELS,
     JEV_MODEL_ID,
     LUNA_MODEL_ID,
     LUNA_PROVIDER,
@@ -15,11 +16,13 @@ from jev_prompts.config.openrouter import (
     SONNET_PROVIDER,
     SYSTEMONE_PATH,
     provider_routing,
+    require_chat_pair,
 )
 
 __all__ = [
     "API_KEY_ENV",
     "CHAT_COMPLETIONS_PATH",
+    "CHAT_MODELS",
     "JEV_MODEL_ID",
     "LUNA_MODEL_ID",
     "LUNA_PROVIDER",
@@ -28,4 +31,5 @@ __all__ = [
     "SONNET_PROVIDER",
     "SYSTEMONE_PATH",
     "provider_routing",
+    "require_chat_pair",
 ]

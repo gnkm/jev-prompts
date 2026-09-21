@@ -41,7 +41,7 @@ CHAT_URL = f"{OPENROUTER_BASE_URL}{CHAT_COMPLETIONS_PATH}"
 CHOICE_QUESTION = {
     "type": "choice",
     "instructions": "Pick one.",
-    "criteria": "labels: ham, spam",
+    "criteria": {"ham": "not spam", "spam": "unsolicited"},
 }
 CHOICE_ANSWER = {
     "type": "choice",
@@ -49,6 +49,8 @@ CHOICE_ANSWER = {
     "confidence": 0.8,
     "probabilities": {"ham": 0.8, "spam": 0.2},
 }
+QUESTIONS = {"intent": CHOICE_QUESTION}
+ANSWERS = {"intent": CHOICE_ANSWER}
 
 
 def _json_response(payload: dict[str, Any], status: int = 200) -> httpx.Response:
@@ -72,7 +74,7 @@ def _client(
     return OpenRouterClient(http=http), captured
 
 
-def test_system_one_posts_systemone_not_chat_completions(
+def test_system_one_posts_question_map_not_chat_completions(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     def handler(request: httpx.Request) -> httpx.Response:
@@ -80,20 +82,50 @@ def test_system_one_posts_systemone_not_chat_completions(
             {
                 "model": "typesafe/jev-1.13-20260917",
                 "provider": "TypeSafe",
-                "answers": [CHOICE_ANSWER],
+                "answers": ANSWERS,
             }
         )
 
     client, captured = _client(monkeypatch, handler)
-    result = client.system_one(state="hello", questions=[CHOICE_QUESTION])
+    result = client.system_one(state="hello", questions=QUESTIONS)
     assert len(captured) == 1
     request = captured[0]
     assert str(request.url) == SYSTEMONE_URL
     assert "chat/completions" not in str(request.url)
     body = json.loads(request.content.decode())
     assert body["model"] == JEV_MODEL_ID
-    assert result.answers[0].choice == "ham"
+    assert body["questions"] == QUESTIONS
+    assert isinstance(body["questions"], dict)
+    assert result.answers["intent"].choice == "ham"
+    assert result.answers["intent"].question_id == "intent"
     assert request.headers["Authorization"] == "Bearer test-key"
+
+
+def test_system_one_rejects_question_list(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise AssertionError("配列の questions を送ってはいけない")
+
+    client, captured = _client(monkeypatch, handler)
+    with pytest.raises(ValueError, match="map"):
+        client.system_one(state="hello", questions=[CHOICE_QUESTION])  # type: ignore[arg-type]
+    assert captured == []
+
+
+def test_answers_list_is_parse_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return _json_response(
+            {
+                "model": "typesafe/jev-1.13-20260917",
+                "answers": [CHOICE_ANSWER],
+            }
+        )
+
+    client, captured = _client(monkeypatch, handler)
+    with pytest.raises(OpenRouterParseError, match="オブジェクト"):
+        client.system_one(state="hello", questions=QUESTIONS)
+    assert len(captured) == 1
 
 
 def test_chat_completions_pins_luna_and_sonnet_providers(
@@ -142,15 +174,37 @@ def test_chat_completions_pins_luna_and_sonnet_providers(
     assert sonnet.confidence == 0.5
 
 
+def test_mismatched_model_provider_rejected_before_http(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise AssertionError("誤った組み合わせを送ってはいけない")
+
+    client, captured = _client(monkeypatch, handler)
+    with pytest.raises(ValueError, match="provider"):
+        client.chat_completions(
+            model=LUNA_MODEL_ID,
+            messages=[{"role": "user", "content": "hi"}],
+            provider=SONNET_PROVIDER,
+        )
+    with pytest.raises(ValueError, match="未許可"):
+        client.chat_completions(
+            model="openai/gpt-4o",
+            messages=[{"role": "user", "content": "hi"}],
+            provider=LUNA_PROVIDER,
+        )
+    assert captured == []
+
+
 def test_parse_failure_raises_and_does_not_retry(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     def handler(request: httpx.Request) -> httpx.Response:
-        return _json_response({"model": "typesafe/jev-1.13-20260917", "answers": []})
+        return _json_response({"model": "typesafe/jev-1.13-20260917", "answers": {}})
 
     client, captured = _client(monkeypatch, handler)
     with pytest.raises(OpenRouterParseError, match="answers"):
-        client.system_one(state="hello", questions=[CHOICE_QUESTION])
+        client.system_one(state="hello", questions=QUESTIONS)
     assert len(captured) == 1
 
 
@@ -181,7 +235,7 @@ def test_http_error_does_not_retry(monkeypatch: pytest.MonkeyPatch) -> None:
 
     client, captured = _client(monkeypatch, handler)
     with pytest.raises(OpenRouterHttpError) as exc:
-        client.system_one(state="hello", questions=[CHOICE_QUESTION])
+        client.system_one(state="hello", questions=QUESTIONS)
     assert exc.value.status_code == 500
     assert len(captured) == 1
 
@@ -194,12 +248,12 @@ def test_missing_api_key_raises_before_http(
 
     def handler(request: httpx.Request) -> httpx.Response:
         captured.append(request)
-        return _json_response({"answers": [CHOICE_ANSWER], "model": JEV_MODEL_ID})
+        return _json_response({"answers": ANSWERS, "model": JEV_MODEL_ID})
 
     http = httpx.Client(transport=httpx.MockTransport(handler))
     client = OpenRouterClient(http=http)
     with pytest.raises(MissingApiKeyError, match=API_KEY_ENV):
-        client.system_one(state="hello", questions=[CHOICE_QUESTION])
+        client.system_one(state="hello", questions=QUESTIONS)
     assert captured == []
 
 

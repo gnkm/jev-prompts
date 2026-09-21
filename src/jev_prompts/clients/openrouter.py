@@ -24,6 +24,7 @@ from jev_prompts.config.openrouter import (
     OPENROUTER_BASE_URL,
     SYSTEMONE_PATH,
     provider_routing,
+    require_chat_pair,
 )
 
 type QuestionType = Literal["choice", "score", "noul"]
@@ -52,6 +53,7 @@ class OpenRouterParseError(OpenRouterError):
 
 @dataclass(frozen=True, slots=True)
 class JevAnswer:
+    question_id: str
     type: QuestionType
     choice: str | None = None
     score: float | None = None
@@ -64,7 +66,7 @@ class JevAnswer:
 class JevResult:
     model: str
     provider: str | None
-    answers: tuple[JevAnswer, ...]
+    answers: dict[str, JevAnswer]
     usage: dict[str, Any] | None
     raw: dict[str, Any]
 
@@ -146,7 +148,7 @@ def _message_text(content: Any) -> str:
     raise OpenRouterParseError("Chat Completions の content が文字列ではない")
 
 
-def _parse_jev_answer(raw: Any) -> JevAnswer:
+def _parse_jev_answer(raw: Any, *, question_id: str) -> JevAnswer:
     obj = _as_object(raw, what="answer")
     qtype = obj.get("type")
     if qtype not in {"choice", "score", "noul"}:
@@ -166,6 +168,7 @@ def _parse_jev_answer(raw: Any) -> JevAnswer:
         if not isinstance(choice, str) or not choice:
             raise OpenRouterParseError("choice の answer.choice が無い")
         return JevAnswer(
+            question_id=question_id,
             type="choice",
             choice=choice,
             confidence=confidence,
@@ -175,6 +178,7 @@ def _parse_jev_answer(raw: Any) -> JevAnswer:
         if "score" not in obj:
             raise OpenRouterParseError("score の answer.score が無い")
         return JevAnswer(
+            question_id=question_id,
             type="score",
             score=_require_number(obj["score"], field="score"),
             confidence=confidence,
@@ -183,6 +187,7 @@ def _parse_jev_answer(raw: Any) -> JevAnswer:
     if "noul" not in obj:
         raise OpenRouterParseError("noul の answer.noul が無い")
     return JevAnswer(
+        question_id=question_id,
         type="noul",
         noul=_require_number(obj["noul"], field="noul"),
         confidence=confidence,
@@ -191,10 +196,13 @@ def _parse_jev_answer(raw: Any) -> JevAnswer:
 
 
 def _parse_jev_result(data: dict[str, Any]) -> JevResult:
-    answers_raw = _as_list(data.get("answers"), what="answers")
+    answers_raw = _as_object(data.get("answers"), what="answers")
     if not answers_raw:
         raise OpenRouterParseError("answers が空")
-    answers = tuple(_parse_jev_answer(item) for item in answers_raw)
+    answers = {
+        str(qid): _parse_jev_answer(item, question_id=str(qid))
+        for qid, item in answers_raw.items()
+    }
     model = data.get("model")
     if not isinstance(model, str) or not model:
         raise OpenRouterParseError("応答の model が無い")
@@ -271,14 +279,14 @@ class OpenRouterClient:
         self,
         *,
         state: str | Mapping[str, Any],
-        questions: Sequence[Mapping[str, Any]],
+        questions: Mapping[str, Mapping[str, Any]],
     ) -> JevResult:
-        if not questions:
-            raise ValueError("questions が空")
+        if not isinstance(questions, Mapping) or not questions:
+            raise ValueError("questions は質問 ID をキーにした map")
         payload = {
             "model": JEV_MODEL_ID,
             "state": dict(state) if isinstance(state, Mapping) else state,
-            "questions": [dict(item) for item in questions],
+            "questions": {str(qid): dict(item) for qid, item in questions.items()},
         }
         data = self._post_json(SYSTEMONE_PATH, payload)
         return _parse_jev_result(data)
@@ -295,10 +303,9 @@ class OpenRouterClient:
     ) -> LlmResult:
         if model == JEV_MODEL_ID or model.startswith("typesafe/jev"):
             raise ValueError("Jev は Chat Completions では呼べない")
+        require_chat_pair(model, provider)
         if not messages:
             raise ValueError("messages が空")
-        if not provider:
-            raise ValueError("provider が空")
         payload: dict[str, Any] = {
             "model": model,
             "messages": [dict(item) for item in messages],
