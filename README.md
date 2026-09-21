@@ -2,50 +2,80 @@
 
 ![CI](https://github.com/gnkm/jev-prompts/actions/workflows/ci.yml/badge.svg)
 
-Jev に 3 つの課題を与え、精度の評価をおこなう。
-課題解決にあたって、Jev にはいくつかのプロンプトを与え、プロンプトの効果を評価できるようにする。
+## 目的
 
-成果物は CLI（Typer）と `results/` の markdown レポートである。結果の把握は markdown を読む。
-図が必要な箇所は画像を生成してそのファイルから参照する。Web UI は提供しない。
-表の処理は Polars を使う。測定値の扱いは [results/README.md](results/README.md)。
+[Jev 向けのプロンプト作法](docs/source-of-truth/jev-prompt-guide.md)が、
+精度と confidence にどれだけ効くかを測る。
 
-Python パッケージ `jev_prompts` の骨格（uv / pytest / Ruff / Typer / Polars / matplotlib）と、ケースネストの実験ランナー、指標の Polars 集計、対応あり検定（McNemar / ブートストラップ 95% CI / Holm）、公開 markdown レポートがある。
-入口は `python -m jev_prompts`（Typer）。準備は `fetch` / `extract`、実行は `preflight` / `run` / `fanout`、公開物は `prices` / `report` / `findings` で切り分ける。ロジックは `jev_prompts` に置き、`scripts/` は薄い入口である。
-パッケージは `report → stats → metrics → runners → prompts → clients → data → config` の一方向レイヤで、Import Linter が逆向きの import を止める。
-複雑度は Radon が測り、Xenon が `pyproject.toml` の閾値で CI を落とす。緩める変更は CODEOWNERS 対象。
-ケース台帳は `case_id` / split / gold / content_hash / 抽出シードを Polars で扱う。本文は同梱しない。
-`python -m jev_prompts fetch`（または `scripts/fetch_data.py`）が BANKING77 / Amazon ESCI / SMS Spam を `data/raw/` へ取得し、台帳のハッシュと照合する。
-プロンプトの正本は `prompts/` の JSON である。`src/jev_prompts/prompts` はそこを読むだけで、A からの 1 軸差分を Python でその場生成しない。Choice の A は BANKING77 の 77 意図と `other`、B1 / B2 は 77 意図のみ。L2 の作成時間は `prompts/creation_time.json` に分で残す。
-実験ランナーはケースごとに全条件を連続実行し、1 リクエスト 1 行を Polars で書く。`probabilities` は必須。`state_json` / `question_json` は `data/logs/` のローカルログだけに置き、公開用 `PublishedRecord` に本文キーは無い。
-投機的 fan-out は精度比較と同一ランに入れない。A の質問をまとめて 1 回と分割して n 回の別ランとし、コスト・遅延・一致率だけを比べる。2 経路のログは `data/logs/fanout-batched.jsonl` と `data/logs/fanout-split.jsonl` に分かれ、本ランの `eval.jsonl` やその集計には混ざらない。
-GitHub Actions は Biome、pytest、Ruff、Import Linter、Xenon、reuse lint を `main` と pull request で実行する。ライブ API と実ネットでのデータ取得は既定の CI に載せない。
+## 課題概要
 
-## セットアップ
+3 種類の課題を準備した。
+これらに異なるプロンプトを与え、その影響を測定した。
 
-Python 3.12 と [uv](https://docs.astral.sh/uv/) を使う。`uv pip` は使わない。
+| 課題 | データセット | 課題概要 |
+| --- | --- | --- |
+| Choice(順序なし多値分類) | [BANKING77](https://huggingface.co/datasets/PolyAI/banking77) | 銀行の顧客メッセージから、77 種の問い合わせ意図を判定する |
+| Score(順序あり分類) | [Amazon ESCI](https://github.com/amazon-science/esci-data) | 検索語と商品から、一致・代替・補完・無関係の関連度を判定する |
+| Noul(二値分類) | [SMS Spam Collection](https://archive.ics.uci.edu/dataset/228/sms+spam+collection) | SMS 本文から、スパムかどうかを判定する |
+
+## 結論
+
+[Jev 向けのプロンプト作法](docs/source-of-truth/jev-prompt-guide.md)は、どの課題でも同じように正しいわけではない。
+ガイドどおりに書けば精度が上がる、とは言えず、効く要素は課題のタイプで分かれた。
+
+| 課題 | 効いた要素 | 効かなかった要素 |
+| --- | --- | --- |
+| Choice | なし。ガイドに沿っても LLM 流でも精度はほぼ同じ | 選択肢同士の区別、質問文、判断に関係ない入力 |
+| Score | 段階の定義。隣り合う段階を状況として区別して書く | 質問文、判断に関係ない入力 |
+| Noul | 質問を否定形にしない | 条件の定義の細部、判断に関係ない入力 |
+
+ガイドが重視する confidence は、ガイドに沿ったプロンプトでも自信のある誤答を減らさなかった。
+素朴な LLM と同等以上の精度をより低いコストと遅延で出せるかは、本測定では判定できなかった。
+
+数値・信頼区間・誤答の内訳は [results/findings.md](results/findings.md)。
+
+## ドキュメントガイド
+
+| 目的 | ドキュメント |
+| --- | --- |
+| プロンプトの効果を知る | [results/findings.md](results/findings.md) |
+| 実験を手元で再現する | 本ドキュメントの「再現」セクション |
+| 本システムを開発する | [ARCHITECTURE.md](ARCHITECTURE.md) と [CONTRIBUTING.md](CONTRIBUTING.md) |
+
+主指標と合格ラインは [評価設計書](docs/source-of-truth/design-of-evaluation.md)。
+測定ファイルの置き方は [results/README.md](results/README.md)。
+プロンプト条件の差分は [prompts/README.md](prompts/README.md)。
+比較用 LLM の選定は [ADR-0002](docs/adr/competitor-llm.md)。
+
+## 成果物
+
+- 課題 3 式（Choice / Score / Noul）: `data/cases/choice.jsonl`、`data/cases/score.jsonl`、`data/cases/noul.jsonl`。課題の定義は評価設計書
+- 実験結果: `results/findings.md`、`results/report.md`、`results/figures/`
+- プロンプト: `prompts/`
+- 推論用コード: `src/jev_prompts/clients/`、`src/jev_prompts/runners/`
+- 精度評価用コード: `src/jev_prompts/metrics/`、`src/jev_prompts/stats/`、`src/jev_prompts/report/`
+- テストコード: `tests/`
+- CI 設定: `.github/workflows/ci.yml`
+- 使用方法のドキュメント: この README の再現、[ARCHITECTURE.md](ARCHITECTURE.md)、[CONTRIBUTING.md](CONTRIBUTING.md)
+- ライセンス全文: `LICENSES/`。ディレクトリとの対応は `REUSE.toml`。データセットの帰属は [DATA_LICENSES.md](DATA_LICENSES.md)
+
+## 再現方法
+
+Python 3.12 と [uv](https://docs.astral.sh/uv/) を使う。
 
 ```bash
 uv python install 3.12
 uv sync
 ```
 
-テストと lint:
+コードが読むキーは環境変数 `OPENROUTER_API_KEY` だけである。リポジトリに置かない。
+`.env` は gitignore 済みで、プログラムは `.env` を読まない。
 
-```bash
-uv run pytest
-uv run ruff check .
-uv run ruff format --check .
-uv run lint-imports
-uv run python scripts/check_complexity.py
-uv run reuse lint
-pnpm exec biome ci .
-```
-
-## CLI
-
-入口は `uv run python -m jev_prompts`。`--help` に System One（`systemone`）と比較用 LLM（`chat`）のモデル ID が出る。
+本文とは、モデルに渡す入力である。Choice は顧客のクエリ、Score は検索語と商品のタイトル・説明、Noul は SMS のメッセージである。正解ラベル（gold）ではない。
+本文は同梱しない。`data/raw/` は gitignore する。Git に入る台帳は `data/cases/` の識別子、split、gold、content_hash、抽出シードだけである。
 
 準備と実行を混ぜない。配布元からの取得はクローン後（または台帳を変えるとき）に一度だけ行い、本ランは `data/` だけを読む。
+ハッシュが台帳と一致しない、台帳が無い、または空なら失敗する。暗黙の再取得はしない。
 
 ```bash
 # 準備（Hugging Face / GitHub / UCI から data/raw へ。API キーは不要）
@@ -61,138 +91,14 @@ uv run python -m jev_prompts preflight --split test
 uv run python -m jev_prompts run --split test
 uv run python -m jev_prompts fanout
 uv run python -m jev_prompts prices
+
+# 公開物の再生成（API キーは不要）
 uv run python -m jev_prompts report
 uv run python -m jev_prompts findings
 ```
 
-- `preflight`: 決定性・トークン上限（32k）・応答のモデル版を事前確認する。失敗したら本ランに進まない。`--split test` で本ランと同じケース集合にする。
-- `run`: ケースごとに全条件を連続実行する精度比較。fan-out は含めない。`--split test` で報告対象の 60 件だけを回す。途中終了したログがあれば `(case_id, condition)` を飛ばして再開する。
-- `fanout`: A の質問群を 1 回にまとめる / 分割する別ラン。コスト・遅延・一致率だけを見る。
-- `prices`: 測定日の OpenRouter 掲載単価を `results/prices.md` に書く。キーが要る。既定の CI には載せない。
-- `report`: `results/published.jsonl` から指標マトリクス・較正・コスト×精度の markdown と図を `results/` に書く。API キーは不要。同等の薄い入口は `scripts/write_report.py`。
-- `findings`: H1〜H4 の判定と A の誤答内訳を `results/findings.md` に書く。入力本文は出さない。目視分類があれば `results/a_error_review.jsonl` を読む。
-
-キーは環境変数 `OPENROUTER_API_KEY`（再現ランでは Podman secret）。本文が無い、ハッシュが台帳と一致しない、台帳が無い、または空なら実行系は失敗する。暗黙の再取得はしない。
-
-ライブ API は既定の CI に載せない。
-
-複雑度ゲート（Xenon / Radon）の閾値は `pyproject.toml` の `[tool.xenon]` が正本。ブロックが閾値より悪い rank になると CI が失敗する。
-
-| 項目 | 閾値 | 落ちる条件 |
-| --- | --- | --- |
-| `max_absolute` | C | いずれかのブロックが D 以上（循環的複雑度 21 以上） |
-| `max_modules` | B | いずれかのモジュールが C 以上（同 11 以上） |
-| `max_average` | A | 平均が B 以上（同 6 以上） |
-
-対象パスは `src` / `scripts` / `tests`。報告だけ見るときは `uv run radon cc -s src scripts tests`。
-
-## プロンプト
-
-実験条件の正本は `prompts/` にある。課題タイプ（`choice` / `score` / `noul`）ごとに A〜C、比較用 LLM は `prompts/llm/<task>/` に L1〜L3 を置く。
-
-- B2 は A と `instructions` が同一で、`criteria` だけが違う。
-- C は A と `questions` が同一で、`state` のキーだけが増える。Choice の C は約 2,000 トークン相当の規約ノイズを `terms_of_service` に置く。
-- L2 作成時間は `prompts/creation_time.json` の各課題の `L2`（単位は分）。
-- ランナーはカタログを読み、欠けた `questions` を A から補完しない。
-
-読み出しは `jev_prompts.prompts.load_bundle`。中身の改訂は JSON を編集する。
-
-## ランナーとログ
-
-`jev_prompts.runners.run_experiment` は課題→条件→ケースではなく、**ケースごとに全条件を連続**で回す。同じケースを全条件に流し、対応のある比較にする。1 リクエスト 1 行。表の正本は Polars。
-
-- `probabilities` は全件必須。落とすと Score の解釈ができない。
-- 再集計用のフルログ（`state_json` / `question_json` を含む）は `data/logs/` に書く。gitignore 済みでコミットしない。
-- 公開用の `PublishedRecord` は本文キーを持たない。`content_hash` と測定値だけを `results/` に置く。
-
-投機的 fan-out は精度比較と混ぜない。`run_fanout_pair` が A の質問群を「1 リクエストにまとめる」経路と「質問ごとに n 回分割する」経路で別実行し、トークン・遅延・答えの一致率だけを出す。ログは `fanout-batched.jsonl` と `fanout-split.jsonl` の別ファイルで、本ランの `eval.jsonl` とはパスも `routing_json.fanout_path` も違う。集計前に混ざっても `drop_fanout_rows` が fan-out 行を除く。
-
-モックで 2 経路のログを書く（ライブ API は既定の CI に載せない）:
-
-```bash
-uv run python scripts/run_fanout.py --mock --log-dir data/logs
-```
-
-ライブ API は既定の CI に載せない。ランナーのユニットテストは execute を差し込み、実行順とスキーマだけを固定する。
-
-## 評価指標
-
-`jev_prompts.metrics.aggregate_metrics` が RequestLog / PublishedRecord の Polars 表を `task` / `condition` / `split` ごとに集計する。API は呼ばない。
-
-| タイプ | 主指標 |
-| --- | --- |
-| Choice | top-1 精度 |
-| Score | gold 段階との MAE（`score` は丸めない）と Spearman 相関 |
-| Noul | AUC（反転補正しない。0.5 未満ならそのまま記録する） |
-
-全タイプ共通の 4 指標は confident 誤答率、ECE（confidence を 10 ビン）、1,000 件あたりトークン、レイテンシ p50 / p95。Noul の confident 誤答は `noul` ≤ 0.1 または ≥ 0.9 かつ不正解。パース失敗は不正解とし、失敗率（`error_rate`）と主指標の対象件数（`n_primary`）を併記する。Noul の予測値と confidence は有限な 0〜1 でなければ集計しない。
-
-合格ライン（例: Choice で A が B1 に対し top-1 +5pt）はコードのアサーションにしない。レポートの判定欄で使う。既知の RequestLog フィクスチャで数値が手計算と一致することをテストする。
-
-`jev_prompts.report.write_report` が公開行から `results/report.md` を書く。課題ごとの条件 × 指標（ブートストラップ CI 付き）、10 ビンの較正表と reliability diagram、コスト × 精度の表と散布図。図は `results/figures/` に出し、markdown から参照する。入力本文のフィールドは出さない。測定値の扱いは [results/README.md](results/README.md)。
-
-本ラン（test 60 件 × 8 条件 × 3 課題）の仮説 H1〜H4 と A の誤答目視は `results/findings.md`、測定日の単価は `results/prices.md`。ライブ API は既定の CI に載せない。
-
-## データ
-
-本文は同梱しない。`data/raw/` は gitignore している。Git に入るのはケース台帳
-（`data/cases/` の `case_id` / split / gold / content_hash / 抽出シード）だけである。
-
-クローン後（または別マシンで再現するとき）に、配布元から取得してハッシュを照合する。
-
-```bash
-uv run python -m jev_prompts fetch
-```
-
-`scripts/fetch_data.py` も同じ fetch の薄い入口である。
-ハッシュが台帳と一致しない、台帳が無い、または空ならコマンドは失敗する。
-実験ランナーは `data/` だけを読み、Hugging Face / GitHub / UCI には触れない。
-本文が無ければ失敗し、暗黙の再取得はしない。
-
-実ネットでの取得は任意で、既定の CI には含めない。ユニットテストはフィクスチャで
-ハッシュ不一致と展開先を検証する。
-
-抽出は課題あたりランダム + 境界、gold で層化した dev / test を小さなフィクスチャで再現する。
-テスト用の合成本文は実行時に組み立て、データセット本文はリポジトリに置かない。
-出典とライセンスは [DATA_LICENSES.md](DATA_LICENSES.md)。
-
-## 比較用 LLM
-
-比較用 LLM は GPT-5.6 Luna（条件 L1 / L2）と Claude Sonnet 5（条件 L3）。
-評価設計書の L1 / L2 に L3 を足し、実験は 8 条件である。選定の正本は
-[ADR-0002](docs/adr/competitor-llm.md)、実装上の境界は [ARCHITECTURE.md](ARCHITECTURE.md)。
-
-| 条件 | モデル | モデル ID | provider.order |
-| --- | --- | --- | --- |
-| L1 / L2 | GPT-5.6 Luna | `openai/gpt-5.6-luna` | OpenAI, Azure |
-| L3 | Claude Sonnet 5 | `anthropic/claude-sonnet-5` | Anthropic, Amazon Bedrock |
-
-OpenRouter で呼び、`provider.order` を上表の順に固定する。第一希望が地域フィルタで落ちても、リスト内の次だけを使う。
-`allow_fallbacks` は false、`require_parameters` は true、`data_collection` は deny。
-temperature は送らない（対応エンドポイントが無く 404 になる）。Luna は `seed` を付け、Sonnet は付けない。
-エイリアスは使わない。実応答のプロバイダをログに残す。
-
-## OpenRouter クライアント
-
-推論の出口は OpenRouter だけ。HTTP クライアントは 1 本で、失敗しても再試行しない。
-キーは環境変数 `OPENROUTER_API_KEY`（再現ランでは Podman secret）のみ。リポジトリに置かない。
-テストは HTTP をモックし、既定の CI は実ネットに出ない。パース失敗は例外を返し、呼び出し側が不正解にする。
-
-| 用途 | メソッド | URL | モデル ID |
-| --- | --- | --- | --- |
-| Jev（条件 A〜C） | POST | `https://openrouter.ai/api/v1/systemone` | `typesafe/jev-1.13` |
-| 比較用 LLM（L1 / L2） | POST | `https://openrouter.ai/api/v1/chat/completions` | `openai/gpt-5.6-luna` |
-| 比較用 LLM（L3） | POST | `https://openrouter.ai/api/v1/chat/completions` | `anthropic/claude-sonnet-5` |
-
-Jev 用の呼び出しに Chat Completions の URL は使わない。`~typesafe/jev-latest` などのエイリアスも使わない。
-
-## 評価の統計
-
-同じケースを条件 A 対 B1 のように 2 条件で比べるときは、当たり外れの差に McNemar、指標の幅にブートストラップ（10,000 回・95% CI）、A 対各条件の多重比較に Holm を使う。独立 2 標本は使わない。p 値だけではなく差と区間を出す。入口は `jev_prompts.stats.compare_paired`。解説は [docs/statistical-methods.md](docs/statistical-methods.md)、位置づけは [ARCHITECTURE.md](ARCHITECTURE.md) の統計節。
-
-## コントリビューション
-
-ブランチ命名とコミット規約は [CONTRIBUTING.md](CONTRIBUTING.md) を参照してください。
+キーが要るのは `preflight` / `run` / `fanout` / `prices`。要らないのは `fetch` / `extract` / `report` / `findings`。
+ライブ API は既定の CI に載せない。ランナー、ログ、エンドポイントの境界は [ARCHITECTURE.md](ARCHITECTURE.md)。
 
 ## ライセンス
 
@@ -205,3 +111,4 @@ Jev 用の呼び出しに Chat Completions の URL は使わない。`~typesafe/
 その他のリポジトリファイル（テスト、ドキュメント、設定など）は MIT です。
 GitHub のサイドバーはルートの MIT のみを表示しますが、MIT が全体に及ぶわけではありません。
 元データは同梱しておらず、各データセットのライセンスは `DATA_LICENSES.md` を参照ください。
+ブランチ命名とコミット規約は [CONTRIBUTING.md](CONTRIBUTING.md)。
