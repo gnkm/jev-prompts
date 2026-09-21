@@ -7,12 +7,13 @@ license = "MIT"
 requires-python = ">=3.12"
 dependencies = [
     "httpx>=0.28.1",
+    "matplotlib>=3.11.2",
     "polars>=1.0",
     "typer>=0.15",
 ]
 
 [project.scripts]
-jev-prompts = "jev_prompts.runners.cli:app"
+jev-prompts = "jev_prompts.report.cli:app"
 
 [build-system]
 requires = ["hatchling"]

@@ -4,7 +4,7 @@
 
 """`python -m jev_prompts` の入口。"""
 
-from jev_prompts.runners.cli import app
+from jev_prompts.report.cli import app
 
 if __name__ == "__main__":
     app()

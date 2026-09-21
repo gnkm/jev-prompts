@@ -7,10 +7,10 @@ Jev に 3 つの課題を与え、精度の評価をおこなう。
 
 成果物は CLI（Typer）と `results/` の markdown レポートである。結果の把握は markdown を読む。
 図が必要な箇所は画像を生成してそのファイルから参照する。Web UI は提供しない。
-表の処理は Polars を使う。
+表の処理は Polars を使う。測定値の扱いは [results/README.md](results/README.md)。
 
-Python パッケージ `jev_prompts` の骨格（uv / pytest / Ruff / Typer / Polars）と、ケースネストの実験ランナー、指標の Polars 集計、対応あり検定（McNemar / ブートストラップ 95% CI / Holm）がある。
-入口は `python -m jev_prompts`（Typer）。準備は `fetch`、実行は `preflight` / `run` / `fanout` で切り分ける。ロジックは `jev_prompts` に置き、`scripts/` は薄い入口である。
+Python パッケージ `jev_prompts` の骨格（uv / pytest / Ruff / Typer / Polars / matplotlib）と、ケースネストの実験ランナー、指標の Polars 集計、対応あり検定（McNemar / ブートストラップ 95% CI / Holm）、公開 markdown レポートがある。
+入口は `python -m jev_prompts`（Typer）。準備は `fetch`、実行は `preflight` / `run` / `fanout`、公開物は `report` で切り分ける。ロジックは `jev_prompts` に置き、`scripts/` は薄い入口である。
 パッケージは `report → stats → metrics → runners → prompts → clients → data → config` の一方向レイヤで、Import Linter が逆向きの import を止める。
 複雑度は Radon が測り、Xenon が `pyproject.toml` の閾値で CI を落とす。緩める変更は CODEOWNERS 対象。
 ケース台帳は `case_id` / split / gold / content_hash / 抽出シードを Polars で扱う。本文は同梱しない。
@@ -55,11 +55,13 @@ uv run python -m jev_prompts fetch
 uv run python -m jev_prompts preflight
 uv run python -m jev_prompts run
 uv run python -m jev_prompts fanout
+uv run python -m jev_prompts report
 ```
 
 - `preflight`: 決定性・トークン上限（32k）・応答のモデル版を事前確認する。失敗したら本ランに進まない。
 - `run`: ケースごとに全条件を連続実行する精度比較。fan-out は含めない。
 - `fanout`: A の質問群を 1 回にまとめる / 分割する別ラン。コスト・遅延・一致率だけを見る。
+- `report`: `results/published.jsonl` から指標マトリクス・較正・コスト×精度の markdown と図を `results/` に書く。API キーは不要。同等の薄い入口は `scripts/write_report.py`。
 
 キーは環境変数 `OPENROUTER_API_KEY`（再現ランでは Podman secret）。本文が無い、ハッシュが台帳と一致しない、台帳が無い、または空なら実行系は失敗する。暗黙の再取得はしない。
 
@@ -117,6 +119,8 @@ uv run python scripts/run_fanout.py --mock --log-dir data/logs
 全タイプ共通の 4 指標は confident 誤答率、ECE（confidence を 10 ビン）、1,000 件あたりトークン、レイテンシ p50 / p95。Noul の confident 誤答は `noul` ≤ 0.1 または ≥ 0.9 かつ不正解。パース失敗は不正解とし、失敗率（`error_rate`）と主指標の対象件数（`n_primary`）を併記する。Noul の予測値と confidence は有限な 0〜1 でなければ集計しない。
 
 合格ライン（例: Choice で A が B1 に対し top-1 +5pt）はコードのアサーションにしない。レポートの判定欄で使う。既知の RequestLog フィクスチャで数値が手計算と一致することをテストする。
+
+`jev_prompts.report.write_report` が公開行から `results/report.md` を書く。課題ごとの条件 × 指標（ブートストラップ CI 付き）、10 ビンの較正表と reliability diagram、コスト × 精度の表と散布図。図は `results/figures/` に出し、markdown から参照する。`query` / `message` / `state_json` は出さない。測定値の扱いは [results/README.md](results/README.md)。
 
 ## データ
 
