@@ -35,6 +35,7 @@ uv run ruff format --check .
 本文は同梱しない。`data/raw/` は gitignore し、配布元からの fetch は後続の Issue で足す。
 Git に入るのはケース台帳（`data/cases/` の `case_id` / split / gold / content_hash / 抽出シード）だけである。
 抽出は課題あたりランダム + 境界、gold で層化した dev / test を小さなフィクスチャで再現する。
+テスト用の合成本文は実行時に組み立て、データセット本文はリポジトリに置かない。
 
 ## 比較用 LLM
 

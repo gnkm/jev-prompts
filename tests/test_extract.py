@@ -5,19 +5,14 @@ from pathlib import Path
 import polars as pl
 import pytest
 
+from case_pools import load_pool
 from jev_prompts.data import ExtractConfig, extract_cases, write_ledger
 from jev_prompts.data.extract import map_gold
 from jev_prompts.data.hashutil import content_hash
 from jev_prompts.data.schema import BODY_COLUMNS
 
-FIXTURES = Path(__file__).resolve().parent / "fixtures" / "pools"
-
 SAMPLE = ExtractConfig(seed=20260921, n_random=4, n_boundary=4, n_dev=3, n_test=5)
 FULL = ExtractConfig(seed=20260921, n_random=8, n_boundary=8, n_dev=6, n_test=10)
-
-
-def load_pool(task: str) -> pl.DataFrame:
-    return pl.read_ndjson(FIXTURES / f"{task}.jsonl")
 
 
 @pytest.mark.parametrize("task", ["choice", "score", "noul"])
@@ -83,5 +78,49 @@ def test_write_extracted_ledger_without_body(tmp_path: Path) -> None:
     path = tmp_path / "choice.jsonl"
     write_ledger(df, path)
     text = path.read_text(encoding="utf-8")
-    assert "fixture:" not in text
+    assert "synthetic" not in text
     assert '"text"' not in text
+
+
+def test_mixed_score_gold_labels_share_a_stratum() -> None:
+    rows = [
+        {
+            "source_id": "m0",
+            "gold": "C",
+            "boundary": True,
+            "query": "q",
+            "title": "t0",
+            "description": "d0",
+        },
+        {
+            "source_id": "m1",
+            "gold": 1,
+            "boundary": True,
+            "query": "q",
+            "title": "t1",
+            "description": "d1",
+        },
+        {
+            "source_id": "m2",
+            "gold": "S",
+            "boundary": False,
+            "query": "q",
+            "title": "t2",
+            "description": "d2",
+        },
+        {
+            "source_id": "m3",
+            "gold": 2,
+            "boundary": False,
+            "query": "q",
+            "title": "t3",
+            "description": "d3",
+        },
+    ]
+    pool = pl.DataFrame(rows, strict=False)
+    config = ExtractConfig(seed=7, n_random=2, n_boundary=2, n_dev=2, n_test=2)
+    df = extract_cases(pool, task="score", config=config)
+    assert set(df["gold"].to_list()) == {1, 2}
+    for gold in (1, 2):
+        splits = set(df.filter(pl.col("gold") == gold)["split"].to_list())
+        assert splits == {"dev", "test"}, gold

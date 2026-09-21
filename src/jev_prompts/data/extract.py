@@ -54,6 +54,8 @@ def map_gold(task: TaskId, raw: Any) -> int | str:
         key = str(raw)
         if key in SCORE_GOLD:
             return SCORE_GOLD[key]
+        if key.isdigit() and int(key) in SCORE_GOLD.values():
+            return int(key)
         raise ValueError(f"score の gold が不正: {raw!r}")
     if task == "noul":
         key = str(raw)
@@ -112,18 +114,52 @@ def _assign_splits(
     if need_dev + need_test != len(leftovers):
         raise ValueError("層化 split の余り件数と不足枠が一致しない")
 
-    for index, item in enumerate(leftovers):
-        if index < need_dev:
+    in_dev = {str(item["gold"]) for item in reserved_dev}
+    in_test = {str(item["gold"]) for item in reserved_test}
+    remaining: list[dict[str, Any]] = []
+    for item in leftovers:
+        gold = str(item["gold"])
+        if gold not in in_dev and need_dev > 0:
             reserved_dev.append(item)
+            in_dev.add(gold)
+            need_dev -= 1
+        elif gold not in in_test and need_test > 0:
+            reserved_test.append(item)
+            in_test.add(gold)
+            need_test -= 1
+        else:
+            remaining.append(item)
+
+    for item in remaining:
+        if need_dev > 0:
+            reserved_dev.append(item)
+            need_dev -= 1
         else:
             reserved_test.append(item)
+            need_test -= 1
 
     assigned: list[dict[str, Any]] = []
     for item in reserved_dev:
         assigned.append({**item, "split": "dev"})
     for item in reserved_test:
         assigned.append({**item, "split": "test"})
+    _require_multi_gold_in_both_splits(assigned, n_dev=n_dev, n_test=n_test)
     return assigned
+
+
+def _require_multi_gold_in_both_splits(
+    assigned: list[dict[str, Any]], *, n_dev: int, n_test: int
+) -> None:
+    """件数が 2 以上の gold は、枠が足りるとき dev/test の両方に入れる。"""
+    by_gold: dict[str, list[str]] = defaultdict(list)
+    for record in assigned:
+        by_gold[str(record["gold"])].append(str(record["split"]))
+    multi = [gold for gold, splits in by_gold.items() if len(splits) >= 2]
+    if len(multi) > min(n_dev, n_test):
+        return
+    missing = [gold for gold in sorted(multi) if set(by_gold[gold]) != {"dev", "test"}]
+    if missing:
+        raise ValueError(f"gold が dev/test の両方に入っていない: {missing}")
 
 
 def extract_cases(
@@ -157,9 +193,13 @@ def extract_cases(
     picked_random = rng.sample(non_boundary, config.n_random)
     picked: list[dict[str, Any]] = []
     for record in picked_boundary:
-        picked.append({**record, "stratum": "boundary"})
+        picked.append(
+            {**record, "gold": map_gold(task_id, record["gold"]), "stratum": "boundary"}
+        )
     for record in picked_random:
-        picked.append({**record, "stratum": "random"})
+        picked.append(
+            {**record, "gold": map_gold(task_id, record["gold"]), "stratum": "random"}
+        )
 
     assigned = _assign_splits(picked, config.n_dev, config.n_test, rng)
     rows: list[dict[str, Any]] = []
@@ -170,7 +210,7 @@ def extract_cases(
                 "case_id": f"{task_id}:{source_id}",
                 "task": task_id,
                 "split": record["split"],
-                "gold": map_gold(task_id, record["gold"]),
+                "gold": record["gold"],
                 "content_hash": content_hash(task_id, record),
                 "extract_seed": config.seed,
                 "stratum": record["stratum"],
