@@ -162,6 +162,32 @@ def test_noul_auc_does_not_invert() -> None:
     assert row["mae"] is None
 
 
+def test_noul_llm_labels_count_as_primary() -> None:
+    logs = local_frame(
+        [
+            _log(case_id="n0", task="noul", gold="yes", answer="spam"),
+            _log(case_id="n1", task="noul", gold="no", answer="ham"),
+            _log(case_id="n2", task="noul", gold="yes", answer="ham"),
+            _log(case_id="n3", task="noul", gold="no", answer="spam"),
+        ]
+    )
+    row = _row(aggregate_metrics(logs), task="noul")
+    assert row["n_primary"] == 4
+    assert row["auc"] == pytest.approx(0.5)
+
+
+def test_score_llm_labels_count_as_primary() -> None:
+    logs = local_frame(
+        [
+            _log(case_id="s0", task="score", gold=1, answer="C"),
+            _log(case_id="s1", task="score", gold=2, answer="S"),
+        ]
+    )
+    row = _row(aggregate_metrics(logs), task="score")
+    assert row["n_primary"] == 2
+    assert row["mae"] == pytest.approx(0.0)
+
+
 def test_noul_auc_partial_pairs() -> None:
     # yes: 0.9, 0.3 / no: 0.4, 0.2 → 勝ち 3 / 4 = 0.75
     logs = local_frame(

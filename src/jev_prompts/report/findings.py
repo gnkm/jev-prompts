@@ -17,11 +17,20 @@ from jev_prompts.report.a_errors import MODE_LABELS, classify_a_errors
 from jev_prompts.report.forbidden import reject_forbidden_text
 from jev_prompts.report.prices import ModelPrice, render_price_table
 from jev_prompts.report.tables import fmt_float, markdown_table
+from jev_prompts.runners.fanout import drop_fanout_rows
 from jev_prompts.stats.compare import compare_paired
 
 _PRIMARY = {"choice": "top1", "score": "mae", "noul": "auc"}
 _H1_DELTA = {"choice": 0.05, "score": 0.2, "noul": 0.05}
 _TASKS = ("choice", "score", "noul")
+
+
+def eval_logs(logs: pl.DataFrame) -> pl.DataFrame:
+    """報告対象は test。fan-out 行は混ぜない。"""
+    frame = drop_fanout_rows(logs)
+    if "split" in frame.columns:
+        return frame.filter(pl.col("split") == "test")
+    return frame
 
 
 def render_findings(
@@ -31,6 +40,7 @@ def render_findings(
     measured_on: date,
     errors: pl.DataFrame | None = None,
 ) -> str:
+    logs = eval_logs(logs)
     metrics = aggregate_metrics(logs)
     paired = compare_paired(logs) if logs.height else pl.DataFrame()
     counted = errors if errors is not None else classify_a_errors(logs)
@@ -42,6 +52,9 @@ def render_findings(
         "test 分割のみ。入力本文は置かない。",
         "",
     ]
+    note = _noul_hash_note(logs)
+    if note:
+        parts.extend([note, ""])
     if prices:
         parts.extend(
             [
@@ -99,6 +112,23 @@ def write_findings(
     dest.parent.mkdir(parents=True, exist_ok=True)
     dest.write_text(text, encoding="utf-8")
     return dest
+
+
+def _noul_hash_note(logs: pl.DataFrame) -> str:
+    if "content_hash" not in logs.columns or "task" not in logs.columns:
+        return ""
+    noul = logs.filter(pl.col("task") == "noul")
+    if "condition" in noul.columns:
+        noul = noul.filter(pl.col("condition") == "A")
+    if noul.height == 0:
+        return ""
+    unique = noul["content_hash"].n_unique()
+    if unique >= noul.height:
+        return ""
+    return (
+        f"noul の test は {noul.height} 行中 content_hash が一意 {unique} 件。"
+        "同一本文の重複を含む測定値をそのまま記録する。"
+    )
 
 
 def _metric_row(metrics: pl.DataFrame, task: str, condition: str) -> dict | None:
@@ -302,18 +332,28 @@ def _h4_section(metrics: pl.DataFrame) -> list[str]:
         )
     )
     notes: list[str] = []
-    wins: list[bool] = []
+    comparable: list[bool] = []
+    missing: list[str] = []
     for task in _TASKS:
         bit = _h4_task(metrics, task)
         if bit is None:
+            missing.append(task)
             continue
         ok, text = bit
-        wins.append(ok)
+        comparable.append(ok)
         notes.append(text)
-    extra = notes or [
-        "- A の tokens_per_1000 が空のため、L1 とコストを並べて判定できない"
-    ]
-    verdict = _verdict(all(wins) if wins else None)
+    if missing:
+        extra = [
+            *notes,
+            f"- 欠けた課題: {', '.join(missing)}。3 課題そろわないため判定不能",
+        ]
+        verdict = _verdict(None)
+    elif comparable:
+        extra = notes
+        verdict = _verdict(all(comparable))
+    else:
+        extra = ["- 比較できる行が無い"]
+        verdict = _verdict(None)
     lines.extend([*extra, f"- 判定: {verdict}", ""])
     return lines
 

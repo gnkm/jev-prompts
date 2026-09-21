@@ -21,12 +21,14 @@ from jev_prompts.runners import (
     RequestLog,
     RunCase,
     iter_case_conditions,
+    local_frame,
     run_experiment,
     to_published,
     write_local_logs,
     write_published_records,
 )
 from jev_prompts.runners.execute import _usage_tokens, repeating_execute
+from jev_prompts.runners.experiment import assert_resume_matches
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 HASH_A = "a" * 64
@@ -229,6 +231,49 @@ def test_probabilities_required() -> None:
             content_hash=case.content_hash,
             probabilities=None,  # type: ignore[arg-type]
         )
+
+
+def test_assert_resume_matches_accepts_same_cases() -> None:
+    existing = local_frame([_log(CASES[0], "A")])
+    assert_resume_matches(existing, CASES[:1])
+
+
+def test_assert_resume_matches_rejects_extra_case_id() -> None:
+    existing = local_frame([_log(CASES[0], "A"), _log(CASES[1], "A")])
+    with pytest.raises(LogSchemaError, match="今回のケースが無い"):
+        assert_resume_matches(existing, CASES[:1])
+
+
+def test_assert_resume_matches_rejects_split_mismatch() -> None:
+    existing = local_frame([_log(CASES[0], "A")])
+    other = RunCase(
+        case_id=CASES[0].case_id,
+        task=CASES[0].task,
+        split="dev",
+        gold=CASES[0].gold,
+        content_hash=CASES[0].content_hash,
+    )
+    with pytest.raises(LogSchemaError, match="split"):
+        assert_resume_matches(existing, [other])
+
+
+def test_assert_resume_matches_rejects_hash_mismatch() -> None:
+    existing = local_frame([_log(CASES[0], "A")])
+    other = RunCase(
+        case_id=CASES[0].case_id,
+        task=CASES[0].task,
+        split=CASES[0].split,
+        gold=CASES[0].gold,
+        content_hash=HASH_B,
+    )
+    with pytest.raises(LogSchemaError, match="content_hash"):
+        assert_resume_matches(existing, [other])
+
+
+def test_assert_resume_matches_rejects_model_mismatch() -> None:
+    existing = local_frame([_log(CASES[0], "A", model="openai/gpt-5.6-luna")])
+    with pytest.raises(LogSchemaError, match="model"):
+        assert_resume_matches(existing, CASES[:1])
 
 
 def test_run_experiment_skips_completed_pairs() -> None:

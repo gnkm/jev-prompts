@@ -178,6 +178,7 @@ def extract_cases(
     source_ids = [str(r["source_id"]) for r in records]
     if len(source_ids) != len(set(source_ids)):
         raise ValueError("source_id が重複している")
+    records = _drop_duplicate_hashes(records, task_id)
 
     boundary = [r for r in records if bool(r["boundary"])]
     non_boundary = [r for r in records if not bool(r["boundary"])]
@@ -218,5 +219,22 @@ def extract_cases(
         )
 
     df = pl.DataFrame(rows).sort("case_id")
+    if df["content_hash"].n_unique() != df.height:
+        raise ValueError("content_hash が重複している")
     validate_ledger(df)
     return df
+
+
+def _drop_duplicate_hashes(
+    records: list[dict[str, Any]], task_id: TaskId
+) -> list[dict[str, Any]]:
+    """同一本文は source_id が先の 1 件だけ残す。"""
+    seen: set[str] = set()
+    unique: list[dict[str, Any]] = []
+    for record in records:
+        digest = content_hash(task_id, record)
+        if digest in seen:
+            continue
+        seen.add(digest)
+        unique.append(record)
+    return unique

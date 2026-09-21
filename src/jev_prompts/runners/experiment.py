@@ -12,8 +12,9 @@ from typing import Any
 
 import polars as pl
 
+from jev_prompts.config import JEV_MODEL_ID, LUNA_MODEL_ID, SONNET_MODEL_ID
 from jev_prompts.data.schema import SPLITS, TASKS, SplitId, TaskId
-from jev_prompts.prompts.catalog import CONDITIONS, ConditionId
+from jev_prompts.prompts.catalog import CONDITIONS, JEV_CONDITIONS, ConditionId
 from jev_prompts.runners.schema import (
     LogSchemaError,
     RequestLog,
@@ -92,6 +93,56 @@ def completed_pairs(frame: pl.DataFrame) -> frozenset[tuple[str, str]]:
     return frozenset(
         zip(frame["case_id"].to_list(), frame["condition"].to_list(), strict=True)
     )
+
+
+def expected_run_model(condition: str) -> str:
+    if condition in JEV_CONDITIONS:
+        return JEV_MODEL_ID
+    if condition in {"L1", "L2"}:
+        return LUNA_MODEL_ID
+    return SONNET_MODEL_ID
+
+
+def assert_resume_matches(
+    existing: pl.DataFrame, cases: Sequence[RunCase | Mapping[str, Any]]
+) -> None:
+    """既存ログが今回のケース・モデルと違うなら再開しない。"""
+    if existing.height == 0:
+        return
+    wanted = {}
+    for item in cases:
+        parsed = as_run_case(item)
+        wanted[parsed.case_id] = parsed
+    extra = sorted(set(existing["case_id"].to_list()) - set(wanted))
+    if extra:
+        sample = ", ".join(extra[:5])
+        raise LogSchemaError(f"既存ログに今回のケースが無い ID がある: {sample}")
+    cols = set(existing.columns)
+    for row in existing.iter_rows(named=True):
+        case = wanted[str(row["case_id"])]
+        if "split" in cols and row.get("split") not in {None, case.split}:
+            raise LogSchemaError(
+                f"既存ログの split が一致しない: {case.case_id} "
+                f"{row.get('split')} != {case.split}"
+            )
+        if "content_hash" in cols and row.get("content_hash") not in {
+            None,
+            case.content_hash,
+        }:
+            raise LogSchemaError(
+                f"既存ログの content_hash が一致しない: {case.case_id}"
+            )
+        if "model" not in cols:
+            continue
+        model = row.get("model")
+        if model in {None, ""}:
+            continue
+        expected = expected_run_model(str(row["condition"]))
+        if str(model) != expected:
+            raise LogSchemaError(
+                f"既存ログの model が一致しない: {case.case_id}/"
+                f"{row.get('condition')} {model} != {expected}"
+            )
 
 
 def run_experiment(

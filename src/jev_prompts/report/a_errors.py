@@ -74,8 +74,8 @@ def classify_a_errors(logs: pl.DataFrame) -> pl.DataFrame:
     )
 
 
-def read_error_review(path: Path) -> pl.DataFrame:
-    """目視分類。case_id / task / mode だけ。本文列は拒否する。"""
+def read_error_review(path: Path, logs: pl.DataFrame) -> pl.DataFrame:
+    """目視分類。A の誤答集合と一対一。本文列は拒否する。"""
     frame = pl.read_ndjson(path)
     missing = [name for name in REVIEW_COLUMNS if name not in frame.columns]
     if missing:
@@ -86,6 +86,18 @@ def read_error_review(path: Path) -> pl.DataFrame:
     unknown = sorted(set(frame["mode"].drop_nulls().to_list()) - set(ERROR_MODES))
     if unknown:
         raise ValueError(f"未知の失敗モード: {', '.join(str(m) for m in unknown)}")
+    reviewed = list(
+        zip(
+            frame["case_id"].cast(pl.String).to_list(),
+            frame["task"].to_list(),
+            strict=True,
+        )
+    )
+    if len(reviewed) != len(set(reviewed)):
+        raise ValueError("目視分類の case_id が重複している")
+    expected = _a_error_keys(logs)
+    if set(reviewed) != expected:
+        raise ValueError("目視分類が A の誤答集合と一致しない")
     counted = (
         frame.group_by(["task", "mode"])
         .len()
@@ -94,6 +106,17 @@ def read_error_review(path: Path) -> pl.DataFrame:
         .with_columns(pl.col("n").cast(pl.UInt32))
     )
     return counted.select("task", "mode", "n")
+
+
+def _a_error_keys(logs: pl.DataFrame) -> set[tuple[str, str]]:
+    if logs.height == 0 or "condition" not in logs.columns:
+        return set()
+    keys: set[tuple[str, str]] = set()
+    for row in logs.filter(pl.col("condition") == "A").to_dicts():
+        if classify_a_error(row) is None:
+            continue
+        keys.add((str(row["case_id"]), str(row["task"])))
+    return keys
 
 
 def _is_correct(task: str, gold: Any, answer: Any) -> bool:

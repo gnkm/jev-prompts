@@ -36,7 +36,12 @@ from jev_prompts.runners.execute import (
     execute_for_fanout,
     repeating_execute,
 )
-from jev_prompts.runners.experiment import RunCase, completed_pairs, run_experiment
+from jev_prompts.runners.experiment import (
+    RunCase,
+    assert_resume_matches,
+    completed_pairs,
+    run_experiment,
+)
 from jev_prompts.runners.fanout import (
     FanoutComparison,
     compare_fanout,
@@ -212,6 +217,10 @@ def run_command(
     local_path = logs_dir / "request_log.jsonl"
     published_path = results_dir / "published.jsonl"
     existing = _existing_local(local_path)
+    try:
+        assert_resume_matches(existing, cases)
+    except LogSchemaError as exc:
+        _fail(str(exc))
     skip = completed_pairs(existing)
     planned = len(cases) * len(CONDITIONS)
     collected: list[RequestLog] = []

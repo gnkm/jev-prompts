@@ -17,7 +17,7 @@ from jev_prompts.clients import MissingApiKeyError
 from jev_prompts.config import BOOTSTRAP_REPLICATES, RESULTS_DIR
 from jev_prompts.report.a_errors import read_error_review
 from jev_prompts.report.errors import ReportError
-from jev_prompts.report.findings import write_findings
+from jev_prompts.report.findings import eval_logs, write_findings
 from jev_prompts.report.prices import (
     fetch_prices,
     read_measured_on,
@@ -84,7 +84,7 @@ def findings_command(
         typer.echo(f"公開行が無い: {published}", err=True)
         raise typer.Exit(code=1)
     try:
-        logs = read_published_records(published)
+        logs = eval_logs(read_published_records(published))
         prices_path = results_dir / "prices.md"
         if prices_path.is_file():
             prices = read_prices_markdown(prices_path)
@@ -93,7 +93,7 @@ def findings_command(
             prices = None
             measured_on = date.today()
         review_path = results_dir / "a_error_review.jsonl"
-        errors = read_error_review(review_path) if review_path.is_file() else None
+        errors = read_error_review(review_path, logs) if review_path.is_file() else None
         path = write_findings(
             logs,
             results_dir / "findings.md",
