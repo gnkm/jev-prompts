@@ -26,6 +26,8 @@ Jev の性能を最大限引き出す方法を知る。
 
 - Python
 - uv(`uv pip` 禁止)
+- Typer
+- Polars
 - pytest
 - Ruff
 - Import Linter

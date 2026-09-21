@@ -13,12 +13,14 @@ Jev プロンプト実験の実装地図。実験の仮説・条件・指標の�
 目的は、Jev の性能を引き出すプロンプト作法が、公開データ上で精度と confidence に
 どれだけ効くかを再現可能な実験として走らせ、数値で報告することである。
 
-このリポジトリが担うのは次の 4 つに限る。
+このリポジトリが担うのは次の 4 つに限る。実験結果を把握する手段は **markdown を読むこと** である。
+入口は CLI（Typer）。Web UI やノートブックを開かせない。図が要る箇所は画像ファイルを
+作り、markdown から参照する。作図ライブラリは問わない。
 
 1. 公開データセットからケースを抽出し、同一サブセットを再現できること
 2. 3 課題 × 7 条件の入力（state / questions、または LLM プロンプト）を組み立てること
 3. Jev と比較用 LLM に投げ、1 リクエスト 1 行で再集計可能なログを残すこと
-4. 事前宣言した指標で集計・検定し、公開可能な結果物を出すこと
+4. 事前宣言した指標で集計・検定し、`results/` の markdown（必要なら埋め込み画像）を出すこと
 
 学習・ファインチューン・モデル配布は範囲外。データセット本文は同梱しない。
 
@@ -91,7 +93,7 @@ flowchart LR
 | 事前確認 | 決定性・トークン上限・パッチバージョン記録 | 共通 |
 | 指標 | Choice / Score / Noul の主指標・副指標と共通 4 指標 | 計算式は固有 |
 | 検定 | 対応あり比較（McNemar、ブートストラップ、Holm） | 共通 |
-| 公開結果 | 入力本文を除いた測定値・図表・レポート | 共通 |
+| 公開結果 | 入力本文を除いた測定値を markdown にし、図表は画像としてそこに含める | 共通 |
 
 課題プラグインが実装するインタフェースは次で足りる。
 
@@ -173,20 +175,20 @@ REUSE の SPDX 識別子をファイルに付け、`reuse lint` で検証する�
 ```text
 .
 ├── src/jev_prompts/          MIT
-│   ├── config/               パス・モデル名・閾値。秘密は置かない
-│   ├── data/                 台帳の読み書き、スキーマ
+│   ├── config/               パス・モデル名・閾値。秘匿情報は置かない
+│   ├── data/                 台帳の読み書き、スキーマ。表は Polars
 │   ├── prompts/              prompts/ 配下を読む。条件の1軸差分を検証可能にする
 │   ├── clients/              OpenRouter（systemone と chat completions）
 │   ├── runners/              本ランと fan-out、事前確認
 │   ├── metrics/              課題タイプ別指標と共通4指標
 │   ├── stats/                McNemar / bootstrap / Holm
-│   └── report/               マトリクス・reliability diagram・散布図
+│   └── report/               results/ へ markdown と埋め込み用画像を書く
 ├── prompts/                  CC0-1.0  人が読むプロンプトの正本
 │   ├── choice/
 │   ├── score/
 │   ├── noul/
 │   └── llm/
-├── scripts/                  MIT  fetch / run_eval / run_fanout
+├── scripts/                  MIT  Typer の入口。fetch / run_eval / run_fanout
 ├── tests/                    MIT  ライブ API を既定の CI に含めない
 ├── data/                     Git 管理外（本文）。台帳メタデータのみ追跡対象
 │   ├── raw/                  配布元の展開物
@@ -262,7 +264,9 @@ report → stats → metrics → runners → prompts → clients → data → co
 - `metrics` は API を呼ばない。`RequestLog` と gold だけを見る。
 - `prompts`（コード）はカタログファイルを読む。`runners` より下に置き、
   ランナーが組み立て規則を再実装しないようにする。
-- `scripts/` は `jev_prompts` を呼ぶエントリポイントであり、逆方向の import は禁止。
+- `scripts/` は Typer の薄い入口であり、逆方向の import は禁止。サブコマンドの中身は `jev_prompts` に置く。
+- 台帳・ログ・集計の表の正本は Polars にする。pandas を第二の表スタックとして足さない。
+  検定や作図が配列を求めるときだけ変換する。
 
 複雑度ゲート（Radon / Xenon）の閾値は `pyproject.toml` に固定する。
 緩める変更は CODEOWNERS のレビュー対象。
@@ -323,13 +327,16 @@ LLM（条件 L1 / L2）。
 
 検定は対応あり前提。独立 2 標本は使わない。
 
-公開物は次の 3 種を `results/` に置く。
+公開物は `results/` の markdown である。読む対象は常にそのファイルで、画像単体や
+別アプリを開く必要はない。設計書が求める 3 種は、Polars で組んだ表に加え、
+作図ライブラリで出した図を同じ markdown から参照する。ライブラリは固定しない。
 
 1. 課題ごとの条件 × 指標マトリクス（信頼区間付き）
-2. 条件別 reliability diagram
-3. コスト × 精度の散布図（7 条件）
+2. 条件別の較正（10 ビンの表と reliability diagram 画像。ECE を併記）
+3. 条件ごとのコストと精度（表と散布図画像）
 
-A の誤答は全件目視分類する。これはコードの自動出力ではなく、レポート執筆手順。
+図ファイルは `results/` 配下に置き、本文は含めない。A の誤答は全件目視分類する。
+これはコードの自動出力ではなく、レポート執筆手順。目視結果も同じ markdown に節を足す。
 
 ## 11. 品質ゲートと CI
 
@@ -354,11 +361,13 @@ CI は上の静的検証とユニットテストまで。有料 API を叩く本
 - Noul の AUC は反転補正せず生値で出す
 - `PublishedRecord` に本文フィールドが無い
 
-## 12. 実行環境と秘密
+## 12. 実行環境と秘匿情報
 
-- 言語: Python。パッケージマネージャは uv。
+- 言語: Python。パッケージマネージャは uv。`uv pip` は使わない。
+- CLI は Typer。`argparse` で入口を増やさない。
+- 表は Polars。ログの読み書きと条件ごとの集計に使う。
 - 再現ランは Podman。資格情報は `podman secret` で OpenRouter キー 1 本を
-  マウントする。TypeSafe 用の秘密は持たない。
+  マウントする。TypeSafe 用の秘匿情報は持たない。
 - 開発時の `.env` は gitignore 済みだが、正本の受け渡し方は Podman secret とする。
 - ホストに残るフルログは個人情報（SMS 本文など）を含み得る。公開前に
   `results/` へ本文なしで書き出す経路以外を配付しない。
@@ -373,6 +382,9 @@ CI は上の静的検証とユニットテストまで。有料 API を叩く本
 - `api.typesafe.ai` への直接呼び出し、および TypeSafe SDK への依存。
 - Jev を Chat Completions で呼ぶこと。OpenRouter 上でも Decisions / System One 専用である。
 - ライブ API を含むテストをデフォルト CI にすること。
+- Web UI、HTML ダッシュボード、ノートブックを結果の閲覧手段にすること。
+  図はファイルに出し、markdown からリンクする。作図ライブラリは問わない。
+- 表の正本を pandas にし、Polars と併用すること。
 - 指標の事後追加。増やす場合は設計書側の変更を Issue で人間に依頼してから。
 
 ## 14. 参照
