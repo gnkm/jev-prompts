@@ -9,11 +9,12 @@ Jev に 3 つの課題を与え、精度の評価をおこなう。
 図が必要な箇所は画像を生成してそのファイルから参照する。Web UI は提供しない。
 表の処理は Polars を使う。
 
-Python パッケージ `jev_prompts` の骨格（uv / pytest / Ruff / Typer / Polars）はある。評価ランナーと集計の本実装は後続。
+Python パッケージ `jev_prompts` の骨格（uv / pytest / Ruff / Typer / Polars）と、ケースネストの実験ランナーがある。集計・検定の本実装は後続。
 パッケージは `report → stats → metrics → runners → prompts → clients → data → config` の一方向レイヤで、Import Linter が逆向きの import を止める。
 ケース台帳は `case_id` / split / gold / content_hash / 抽出シードを Polars で扱う。本文は同梱しない。
 `scripts/fetch_data.py` が BANKING77 / Amazon ESCI / SMS Spam を `data/raw/` へ取得し、台帳のハッシュと照合する。
 プロンプトの正本は `prompts/` の JSON である。`src/jev_prompts/prompts` はそこを読むだけで、A からの 1 軸差分を Python でその場生成しない。各タイプ 1 問のフィクスチャ（77 意図は後続）。
+実験ランナーはケースごとに全条件を連続実行し、1 リクエスト 1 行を Polars で書く。`probabilities` は必須。`state_json` / `question_json` は `data/logs/` のローカルログだけに置き、公開用 `PublishedRecord` に本文キーは無い。
 GitHub Actions は Biome、pytest、Ruff、Import Linter、reuse lint を `main` と pull request で実行する。ライブ API と実ネットでのデータ取得は既定の CI に載せない。
 
 ## セットアップ
@@ -44,6 +45,16 @@ uv run reuse lint
 - ランナーはカタログを読み、欠けた `questions` を A から補完しない。
 
 読み出しは `jev_prompts.prompts.load_bundle`。中身の改訂は JSON を編集する。
+
+## ランナーとログ
+
+`jev_prompts.runners.run_experiment` は課題→条件→ケースではなく、**ケースごとに全条件を連続**で回す。同じケースを全条件に流し、対応のある比較にする。1 リクエスト 1 行。表の正本は Polars。
+
+- `probabilities` は全件必須。落とすと Score の解釈ができない。
+- 再集計用のフルログ（`state_json` / `question_json` を含む）は `data/logs/` に書く。gitignore 済みでコミットしない。
+- 公開用の `PublishedRecord` は本文キーを持たない。`content_hash` と測定値だけを `results/` に置く。
+
+ライブ API は既定の CI に載せない。ランナーのユニットテストは execute を差し込み、実行順とスキーマだけを固定する。
 
 ## データ
 
