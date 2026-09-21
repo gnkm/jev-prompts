@@ -248,7 +248,10 @@ def _one_metric(
         return None
     ci_low, ci_high = percentile_ci(diffs, ci_level)
     p_raw = _p_for(kind, paired, metric, diffs)
-    n_base, n_oth, n_disc = _mcnemar_cells(paired) if metric == "accuracy" else (None, None, None)
+    if metric == "accuracy":
+        n_base, n_oth, n_disc = _mcnemar_cells(paired)
+    else:
+        n_base, n_oth, n_disc = None, None, None
     return {
         "metric": metric,
         "n_paired": len(left),
@@ -268,9 +271,7 @@ def _one_metric(
     }
 
 
-def _p_for(
-    kind: str, paired: pl.DataFrame, metric: str, diffs: list[float]
-) -> float:
+def _p_for(kind: str, paired: pl.DataFrame, metric: str, diffs: list[float]) -> float:
     if kind == "mcnemar" and metric == "accuracy":
         n_base, n_oth, _n_disc = _mcnemar_cells(paired)
         return mcnemar_p_value(n_base, n_oth)
@@ -337,7 +338,8 @@ def _auc_pairs(paired: pl.DataFrame) -> tuple[list[object], list[object]]:
 
 def _confidence_pairs(paired: pl.DataFrame) -> tuple[list[object], list[object]]:
     rows = paired.filter(
-        pl.col("cal_confidence").is_not_null() & pl.col("cal_confidence_other").is_not_null()
+        pl.col("cal_confidence").is_not_null()
+        & pl.col("cal_confidence_other").is_not_null()
     )
     return rows["cal_confidence"].to_list(), rows["cal_confidence_other"].to_list()
 
