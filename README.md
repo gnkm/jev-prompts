@@ -55,6 +55,20 @@ OpenRouter で呼び、`provider.order` を上表のプロバイダに固定す�
 `allow_fallbacks` は false、`require_parameters` は true、`data_collection` は deny。
 エイリアスは使わない。
 
+## OpenRouter クライアント
+
+推論の出口は OpenRouter だけ。HTTP クライアントは 1 本で、失敗しても再試行しない。
+キーは環境変数 `OPENROUTER_API_KEY`（再現ランでは Podman secret）のみ。リポジトリに置かない。
+テストは HTTP をモックし、既定の CI は実ネットに出ない。パース失敗は例外を返し、呼び出し側が不正解にする。
+
+| 用途 | メソッド | URL | モデル ID |
+| --- | --- | --- | --- |
+| Jev（条件 A〜C） | POST | `https://openrouter.ai/api/v1/systemone` | `typesafe/jev-1.13` |
+| 比較用 LLM（L1 / L2） | POST | `https://openrouter.ai/api/v1/chat/completions` | `openai/gpt-5.6-luna` |
+| 比較用 LLM（L3） | POST | `https://openrouter.ai/api/v1/chat/completions` | `anthropic/claude-sonnet-5` |
+
+Jev 用の呼び出しに Chat Completions の URL は使わない。`~typesafe/jev-latest` などのエイリアスも使わない。
+
 ## 評価の統計
 
 同じケースを条件 A 対 B1 のように 2 条件で比べるときは、当たり外れの差に McNemar、指標の幅にブートストラップ、複数回の判定に Holm を使う。解説は [docs/statistical-methods.md](docs/statistical-methods.md)、位置づけは [ARCHITECTURE.md](ARCHITECTURE.md) の統計節。
