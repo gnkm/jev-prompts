@@ -6,6 +6,7 @@ readme = "README.md"
 license = "MIT"
 requires-python = ">=3.12"
 dependencies = [
+    "httpx>=0.28.1",
     "polars>=1.0",
     "typer>=0.15",
 ]
@@ -27,12 +28,13 @@ testpaths = ["tests"]
 
 [tool.ruff]
 target-version = "py312"
-src = ["src", "tests"]
+src = ["src", "tests", "scripts"]
 line-length = 88
 # Ruff 0.16 は markdown 内の Python も見る。source-of-truth は編集禁止のため py のみ対象にする。
 include = [
     "src/**/*.py",
     "tests/**/*.py",
+    "scripts/**/*.py",
     "pyproject.toml",
 ]
 

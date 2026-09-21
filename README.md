@@ -9,11 +9,12 @@ Jev に 3 つの課題を与え、精度の評価をおこなう。
 図が必要な箇所は画像を生成してそのファイルから参照する。Web UI は提供しない。
 表の処理は Polars を使う。
 
-Python パッケージ `jev_prompts` の骨格（uv / pytest / Ruff / Typer / Polars）はある。CLI と集計の本実装は後続。
+Python パッケージ `jev_prompts` の骨格（uv / pytest / Ruff / Typer / Polars）はある。評価ランナーと集計の本実装は後続。
 パッケージは `report → stats → metrics → runners → prompts → clients → data → config` の一方向レイヤで、Import Linter が逆向きの import を止める。
-ケース台帳は `case_id` / split / gold / content_hash / 抽出シードを Polars で扱う。本文は同梱しない、fetch は後続。
+ケース台帳は `case_id` / split / gold / content_hash / 抽出シードを Polars で扱う。本文は同梱しない。
+`scripts/fetch_data.py` が BANKING77 / Amazon ESCI / SMS Spam を `data/raw/` へ取得し、台帳のハッシュと照合する。
 プロンプトの正本は `prompts/` の JSON である。`src/jev_prompts/prompts` はそこを読むだけで、A からの 1 軸差分を Python でその場生成しない。各タイプ 1 問のフィクスチャ（77 意図は後続）。
-GitHub Actions は Biome、pytest、Ruff、Import Linter、reuse lint を `main` と pull request で実行する。ライブ API は既定の CI に載せない。
+GitHub Actions は Biome、pytest、Ruff、Import Linter、reuse lint を `main` と pull request で実行する。ライブ API と実ネットでのデータ取得は既定の CI に載せない。
 
 ## セットアップ
 
@@ -46,10 +47,25 @@ uv run reuse lint
 
 ## データ
 
-本文は同梱しない。`data/raw/` は gitignore し、配布元からの fetch は後続の Issue で足す。
-Git に入るのはケース台帳（`data/cases/` の `case_id` / split / gold / content_hash / 抽出シード）だけである。
+本文は同梱しない。`data/raw/` は gitignore している。Git に入るのはケース台帳
+（`data/cases/` の `case_id` / split / gold / content_hash / 抽出シード）だけである。
+
+クローン後（または別マシンで再現するとき）に、配布元から取得してハッシュを照合する。
+
+```bash
+uv run python scripts/fetch_data.py
+```
+
+ハッシュが台帳と一致しない、台帳が無い、または空ならコマンドは失敗する。
+実験ランナーは `data/` だけを読み、Hugging Face / GitHub / UCI には触れない。
+本文が無ければ失敗し、暗黙の再取得はしない。
+
+実ネットでの取得は任意で、既定の CI には含めない。ユニットテストはフィクスチャで
+ハッシュ不一致と展開先を検証する。
+
 抽出は課題あたりランダム + 境界、gold で層化した dev / test を小さなフィクスチャで再現する。
 テスト用の合成本文は実行時に組み立て、データセット本文はリポジトリに置かない。
+出典とライセンスは [DATA_LICENSES.md](DATA_LICENSES.md)。
 
 ## 比較用 LLM
 
@@ -65,6 +81,20 @@ Git に入るのはケース台帳（`data/cases/` の `case_id` / split / gold 
 OpenRouter で呼び、`provider.order` を上表のプロバイダに固定する。
 `allow_fallbacks` は false、`require_parameters` は true、`data_collection` は deny。
 エイリアスは使わない。
+
+## OpenRouter クライアント
+
+推論の出口は OpenRouter だけ。HTTP クライアントは 1 本で、失敗しても再試行しない。
+キーは環境変数 `OPENROUTER_API_KEY`（再現ランでは Podman secret）のみ。リポジトリに置かない。
+テストは HTTP をモックし、既定の CI は実ネットに出ない。パース失敗は例外を返し、呼び出し側が不正解にする。
+
+| 用途 | メソッド | URL | モデル ID |
+| --- | --- | --- | --- |
+| Jev（条件 A〜C） | POST | `https://openrouter.ai/api/v1/systemone` | `typesafe/jev-1.13` |
+| 比較用 LLM（L1 / L2） | POST | `https://openrouter.ai/api/v1/chat/completions` | `openai/gpt-5.6-luna` |
+| 比較用 LLM（L3） | POST | `https://openrouter.ai/api/v1/chat/completions` | `anthropic/claude-sonnet-5` |
+
+Jev 用の呼び出しに Chat Completions の URL は使わない。`~typesafe/jev-latest` などのエイリアスも使わない。
 
 ## 評価の統計
 

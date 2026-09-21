@@ -72,7 +72,6 @@ def test_gitignore_excludes_data_raw() -> None:
     assert "data/raw/" in gitignore
 
 
-def test_readme_says_body_is_not_bundled_and_fetch_is_later() -> None:
+def test_readme_says_body_is_not_bundled() -> None:
     readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
     assert "本文は同梱しない" in readme
-    assert "fetch は後続" in readme
