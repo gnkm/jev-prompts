@@ -25,6 +25,9 @@ GROUP_KEYS: Final[tuple[str, ...]] = ("task", "condition", "split")
 METRIC_COLUMNS: Final[tuple[str, ...]] = (
     *GROUP_KEYS,
     "n",
+    "n_error",
+    "n_primary",
+    "error_rate",
     "top1",
     "mae",
     "spearman",
@@ -72,6 +75,9 @@ def aggregate_metrics(logs: pl.DataFrame) -> pl.DataFrame:
 
     grouped = prepared.group_by(list(GROUP_KEYS), maintain_order=True).agg(
         n=pl.len(),
+        n_error=pl.col("has_error").sum(),
+        n_primary=pl.col("primary_valid").sum(),
+        error_rate=pl.col("has_error").mean(),
         top1=_top1_expr(),
         mae=_mae_expr(),
         spearman=_spearman_expr(),
@@ -97,6 +103,9 @@ def _result_schema() -> dict[str, pl.DataType]:
         "condition": pl.String,
         "split": pl.String,
         "n": pl.UInt32,
+        "n_error": pl.UInt32,
+        "n_primary": pl.UInt32,
+        "error_rate": pl.Float64,
         "top1": pl.Float64,
         "mae": pl.Float64,
         "spearman": pl.Float64,
@@ -167,7 +176,7 @@ def _prepare(logs: pl.DataFrame) -> pl.DataFrame:
         .otherwise(pl.col("confidence") >= CONFIDENT_THRESHOLD)
         .fill_null(False)
     )
-    return frame.with_columns(
+    prepared = frame.with_columns(
         pred=pred,
         gold_score=gold_score,
         gold_yes=gold_yes,
@@ -176,6 +185,56 @@ def _prepare(logs: pl.DataFrame) -> pl.DataFrame:
         cal_confidence=cal_confidence,
         confident_error=confident & ~correct,
     )
+    _require_unit_interval(prepared)
+    score_valid = (
+        pl.col("pred").is_not_null()
+        & pl.col("gold_score").is_not_null()
+        & ~pl.col("has_error")
+    )
+    noul_valid = (
+        pl.col("pred").is_not_null()
+        & pl.col("gold_yes").is_not_null()
+        & ~pl.col("has_error")
+    )
+    return prepared.with_columns(
+        primary_valid=(
+            pl.when(pl.col("task") == "choice")
+            .then(pl.lit(True))
+            .when(pl.col("task") == "score")
+            .then(score_valid)
+            .when(pl.col("task") == "noul")
+            .then(noul_valid)
+            .otherwise(pl.lit(False))
+        )
+    )
+
+
+def _require_unit_interval(prepared: pl.DataFrame) -> None:
+    """Noul の予測と confidence は有限な [0, 1]。Score の連続値は対象外。"""
+    _reject_outside_unit(
+        prepared.filter(pl.col("confidence").is_not_null())["confidence"],
+        "confidence",
+    )
+    noul = prepared.filter(
+        (pl.col("task") == "noul") & pl.col("pred").is_not_null() & ~pl.col("has_error")
+    )
+    if noul.height > 0:
+        _reject_outside_unit(noul["pred"], "noul")
+
+
+def _reject_outside_unit(values: pl.Series, name: str) -> None:
+    if values.len() == 0:
+        return
+    numeric = values.cast(pl.Float64, strict=False)
+    bad = (
+        numeric.is_null()
+        | numeric.is_nan()
+        | numeric.is_infinite()
+        | (numeric < 0)
+        | (numeric > 1)
+    )
+    if bool(bad.any()):
+        raise MetricsError(f"{name} は有限な 0〜1 でなければならない")
 
 
 def _top1_expr() -> pl.Expr:

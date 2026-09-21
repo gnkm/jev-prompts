@@ -73,6 +73,9 @@ def test_choice_top1_matches_hand_calculation() -> None:
     row = _row(aggregate_metrics(logs), task="choice")
     assert row["top1"] == pytest.approx(0.75)
     assert row["n"] == 4
+    assert row["n_error"] == 0
+    assert row["n_primary"] == 4
+    assert row["error_rate"] == pytest.approx(0.0)
     assert row["mae"] is None
     assert row["spearman"] is None
     assert row["auc"] is None
@@ -95,6 +98,10 @@ def test_choice_parse_failure_counts_as_incorrect() -> None:
     )
     row = _row(aggregate_metrics(logs), task="choice")
     assert row["top1"] == pytest.approx(0.5)
+    assert row["n"] == 2
+    assert row["n_error"] == 1
+    assert row["n_primary"] == 2
+    assert row["error_rate"] == pytest.approx(0.5)
 
 
 def test_score_mae_does_not_round() -> None:
@@ -111,6 +118,8 @@ def test_score_mae_does_not_round() -> None:
     )
     row = _row(aggregate_metrics(logs), task="score")
     assert row["mae"] == pytest.approx(0.4)
+    assert row["n_primary"] == 4
+    assert row["error_rate"] == pytest.approx(0.0)
     rounded = [round(x) for x in (0.4, 1.4, 1.6, 2.6)]
     assert rounded == [0, 1, 2, 3]
     assert sum(abs(a - b) for a, b in zip(rounded, (0, 1, 2, 3), strict=True)) == 0
@@ -147,6 +156,7 @@ def test_noul_auc_does_not_invert() -> None:
     )
     row = _row(aggregate_metrics(logs), task="noul")
     assert row["auc"] == pytest.approx(0.0)
+    assert row["n_primary"] == 4
     assert 1.0 - row["auc"] == pytest.approx(1.0)
     assert row["top1"] is None
     assert row["mae"] is None
@@ -347,6 +357,53 @@ def test_published_records_are_aggregatable() -> None:
     published = to_published(local)
     row = _row(aggregate_metrics(published), task="choice")
     assert row["top1"] == pytest.approx(1.0)
+
+
+def test_score_errors_are_excluded_from_mae_but_counted() -> None:
+    # 成功 2 件の MAE は |1.0-1|+|2.0-2| / 2 = 0。失敗 1 件は error_rate に出す。
+    logs = local_frame(
+        [
+            _log(case_id="s0", task="score", gold=1, answer=1.0),
+            _log(case_id="s1", task="score", gold=2, answer=2.0),
+            RequestLog.failed(
+                case_id="s2",
+                task="score",
+                condition="A",
+                split="test",
+                gold=3,
+                content_hash=HASH_A,
+                error="parse",
+            ),
+        ]
+    )
+    row = _row(aggregate_metrics(logs), task="score")
+    assert row["n"] == 3
+    assert row["n_error"] == 1
+    assert row["n_primary"] == 2
+    assert row["error_rate"] == pytest.approx(1 / 3)
+    assert row["mae"] == pytest.approx(0.0)
+
+
+def test_rejects_noul_outside_unit_interval() -> None:
+    logs = local_frame([_log(case_id="n0", task="noul", gold="yes", answer=1.5)])
+    with pytest.raises(MetricsError, match="0〜1"):
+        aggregate_metrics(logs)
+
+
+def test_rejects_non_finite_confidence() -> None:
+    logs = local_frame(
+        [
+            _log(
+                case_id="c0",
+                task="choice",
+                gold="a",
+                answer="a",
+                confidence=float("nan"),
+            )
+        ]
+    )
+    with pytest.raises(MetricsError, match="0〜1"):
+        aggregate_metrics(logs)
 
 
 def test_missing_columns_raise() -> None:

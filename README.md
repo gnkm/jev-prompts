@@ -66,7 +66,7 @@ uv run reuse lint
 | Score | gold 段階との MAE（`score` は丸めない）と Spearman 相関 |
 | Noul | AUC（反転補正しない。0.5 未満ならそのまま記録する） |
 
-全タイプ共通の 4 指標は confident 誤答率、ECE（confidence を 10 ビン）、1,000 件あたりトークン、レイテンシ p50 / p95。Noul の confident 誤答は `noul` ≤ 0.1 または ≥ 0.9 かつ不正解。
+全タイプ共通の 4 指標は confident 誤答率、ECE（confidence を 10 ビン）、1,000 件あたりトークン、レイテンシ p50 / p95。Noul の confident 誤答は `noul` ≤ 0.1 または ≥ 0.9 かつ不正解。パース失敗は不正解とし、失敗率（`error_rate`）と主指標の対象件数（`n_primary`）を併記する。Noul の予測値と confidence は有限な 0〜1 でなければ集計しない。
 
 合格ライン（例: Choice で A が B1 に対し top-1 +5pt）はコードのアサーションにしない。レポートの判定欄で使う。既知の RequestLog フィクスチャで数値が手計算と一致することをテストする。
 
