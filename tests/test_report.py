@@ -244,7 +244,6 @@ def test_root_readme_links_results_readme() -> None:
     readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
     assert "results/README.md" in readme
     assert "python -m jev_prompts report" in readme
-    assert "scripts/write_report.py" in readme
 
 
 def test_results_readme_mentions_measurements() -> None:
@@ -254,6 +253,7 @@ def test_results_readme_mentions_measurements() -> None:
     assert "findings.md" in text
     assert "prices.md" in text
     assert "入力本文" in text
+    assert "scripts/write_report.py" in text
 
 
 def test_checked_in_results_omit_forbidden_tokens() -> None:
@@ -269,5 +269,5 @@ def test_checked_in_results_omit_forbidden_tokens() -> None:
 def test_biome_skips_generated_figures() -> None:
     text = (REPO_ROOT / "biome.json").read_text(encoding="utf-8")
     assert "!results/figures" in text
-    readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
-    assert "biome ci" in readme
+    architecture = (REPO_ROOT / "ARCHITECTURE.md").read_text(encoding="utf-8")
+    assert "biome ci" in architecture

@@ -437,11 +437,14 @@ def test_missing_columns_raise() -> None:
         aggregate_metrics(pl.DataFrame({"task": ["choice"]}))
 
 
-def test_readme_describes_metrics() -> None:
+def test_design_doc_defines_metrics() -> None:
+    design = (REPO_ROOT / "docs/source-of-truth/design-of-evaluation.md").read_text(
+        encoding="utf-8"
+    )
     readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
-    assert "top-1" in readme
-    assert "MAE" in readme
-    assert "Spearman" in readme
-    assert "AUC" in readme
-    assert "合格ライン" in readme
-    assert "Polars" in readme
+    assert "top-1" in design
+    assert "MAE" in design
+    assert "Spearman" in design
+    assert "AUC" in design
+    assert "合格ライン" in design
+    assert "design-of-evaluation.md" in readme

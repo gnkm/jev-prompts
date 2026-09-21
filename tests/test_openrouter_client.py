@@ -317,8 +317,8 @@ def test_source_has_no_hardcoded_api_keys() -> None:
             assert token not in text, f"{path} にキーらしい文字列がある"
 
 
-def test_readme_documents_endpoints_and_model_ids() -> None:
-    text = (ROOT / "README.md").read_text(encoding="utf-8")
+def test_architecture_documents_endpoints_and_model_ids() -> None:
+    text = (ROOT / "ARCHITECTURE.md").read_text(encoding="utf-8")
     assert "/api/v1/systemone" in text
     assert "/api/v1/chat/completions" in text
     assert JEV_MODEL_ID in text

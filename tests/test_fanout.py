@@ -275,12 +275,12 @@ def test_missing_split_answer_is_not_full_match() -> None:
     assert comparison.match_rate == pytest.approx(0.5)
 
 
-def test_readme_describes_separate_fanout_run() -> None:
-    readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
-    assert "投機的 fan-out" in readme
-    assert "fanout-batched.jsonl" in readme
-    assert "fanout-split.jsonl" in readme
-    assert "精度比較" in readme
+def test_architecture_describes_separate_fanout_run() -> None:
+    text = (REPO_ROOT / "ARCHITECTURE.md").read_text(encoding="utf-8")
+    assert "投機的 fan-out" in text
+    assert "fanout-batched.jsonl" in text
+    assert "fanout-split.jsonl" in text
+    assert "精度比較" in text
 
 
 def test_mock_cli_writes_two_log_files(tmp_path: Path) -> None:

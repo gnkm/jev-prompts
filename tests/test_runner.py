@@ -331,11 +331,11 @@ def test_gitignore_excludes_local_logs() -> None:
     assert "data/logs/" in gitignore
 
 
-def test_readme_describes_case_nested_runner() -> None:
-    readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
-    assert "ケースごとに全条件" in readme
-    assert "PublishedRecord" in readme
-    assert "data/logs/" in readme
+def test_architecture_describes_case_nested_runner() -> None:
+    text = (REPO_ROOT / "ARCHITECTURE.md").read_text(encoding="utf-8")
+    assert "ケースごとに全条件" in text
+    assert "PublishedRecord" in text
+    assert "data/logs/" in text
 
 
 def test_repeating_execute_averages_numeric_answers() -> None:
