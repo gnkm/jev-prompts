@@ -253,9 +253,26 @@ def test_execute_exception_stamps_fanout_path() -> None:
     assert "boom" in batched["error"][0]
     assert all(is_fanout_row(raw) for raw in batched["routing_json"])
     assert all(is_fanout_row(raw) for raw in split["routing_json"])
-    assert comparison.compared == 0
-    assert comparison.match_rate is None
+    assert comparison.compared == 2
+    assert comparison.matched == 0
+    assert comparison.match_rate == pytest.approx(0.0)
     assert comparison.split_requests == 2
+
+
+def test_missing_split_answer_is_not_full_match() -> None:
+    def execute(
+        case: RunCase, questions: Mapping[str, Mapping[str, object]]
+    ) -> RequestLog:
+        if len(questions) == 1 and "dept" in questions:
+            raise RuntimeError("dept missing")
+        return _execute(case, questions)
+
+    _batched, _split, comparison, _b, _s = run_fanout_pair(
+        CASES[:1], QUESTIONS, execute
+    )
+    assert comparison.compared == 2
+    assert comparison.matched == 1
+    assert comparison.match_rate == pytest.approx(0.5)
 
 
 def test_readme_describes_separate_fanout_run() -> None:

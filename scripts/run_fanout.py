@@ -84,7 +84,8 @@ def main(
         f"{comparison.batched_usage_tokens} vs {comparison.split_usage_tokens}; "
         "latency_ms "
         f"{comparison.batched_latency_ms} vs {comparison.split_latency_ms}; "
-        f"match_rate {comparison.match_rate}"
+        f"match_rate {comparison.match_rate} "
+        f"({comparison.matched}/{comparison.compared})"
     )
 
 

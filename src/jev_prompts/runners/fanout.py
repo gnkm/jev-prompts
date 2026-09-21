@@ -156,8 +156,10 @@ def compare_fanout(
 ) -> FanoutComparison:
     batched_answers = _answers_by_case_question(batched)
     split_answers = _answers_by_case_question(split)
-    keys = sorted(set(batched_answers) & set(split_answers))
-    matched = sum(1 for key in keys if batched_answers[key] == split_answers[key])
+    keys = sorted(_planned_keys(batched) | _planned_keys(split))
+    matched = sum(
+        1 for key in keys if _answers_agree(key, batched_answers, split_answers)
+    )
     compared = len(keys)
     return FanoutComparison(
         n_cases=_n_cases(batched, split),
@@ -287,6 +289,31 @@ def _row_answers(row: Mapping[str, Any]) -> dict[str, str] | None:
     if len(qids) != 1 or answer is None:
         return None
     return {qids[0]: str(answer)}
+
+
+def _planned_keys(df: pl.DataFrame) -> set[tuple[str, str]]:
+    """失敗行も含め、question_json にある (case_id, question_id) を集める。"""
+    out: set[tuple[str, str]] = set()
+    if df.height == 0 or "case_id" not in df.columns:
+        return out
+    if "question_json" not in df.columns:
+        return out
+    records = df.select(["case_id", "question_json"]).iter_rows(named=True)
+    for row in records:
+        case_id = str(row["case_id"])
+        for qid in _question_ids(row.get("question_json")):
+            out.add((case_id, qid))
+    return out
+
+
+def _answers_agree(
+    key: tuple[str, str],
+    batched_answers: dict[tuple[str, str], str],
+    split_answers: dict[tuple[str, str], str],
+) -> bool:
+    left = batched_answers.get(key)
+    right = split_answers.get(key)
+    return left is not None and right is not None and left == right
 
 
 def _answers_by_case_question(df: pl.DataFrame) -> dict[tuple[str, str], str]:
