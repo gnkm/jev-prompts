@@ -129,34 +129,42 @@ def test_mock_two_paths_write_separate_files(tmp_path: Path) -> None:
         calls.append((case.case_id, tuple(questions)))
         return _execute(case, questions)
 
-    batched, split, comparison, batched_path, split_path = run_fanout_pair(
+    batched, split, _comparison, batched_path, split_path = run_fanout_pair(
         CASES, QUESTIONS, execute, log_dir=tmp_path
     )
-    assert batched_path is not None
-    assert split_path is not None
-    assert batched_path != split_path
-    assert batched_path.name == FANOUT_BATCHED_LOG_FILENAME
-    assert split_path.name == FANOUT_SPLIT_LOG_FILENAME
+    assert batched_path is not None and split_path is not None
+    assert {batched_path.name, split_path.name} == {
+        FANOUT_BATCHED_LOG_FILENAME,
+        FANOUT_SPLIT_LOG_FILENAME,
+    }
     assert not (tmp_path / EVAL_LOG_FILENAME).exists()
-
-    from_disk_batched = read_local_logs(batched_path)
-    from_disk_split = read_local_logs(split_path)
-    assert from_disk_batched.height == batched.height == len(CASES)
-    assert from_disk_split.height == split.height == len(CASES) * len(QUESTIONS)
-
+    assert read_local_logs(batched_path).height == batched.height == len(CASES)
+    assert (
+        read_local_logs(split_path).height
+        == split.height
+        == (len(CASES) * len(QUESTIONS))
+    )
     case_ids = [case.case_id for case in CASES]
-    expected_batched = [(cid, ("intent", "dept")) for cid in case_ids]
-    expected_split = [(cid, (qid,)) for cid in case_ids for qid in QUESTIONS]
-    assert calls == expected_batched + expected_split
+    assert calls == [
+        *((cid, ("intent", "dept")) for cid in case_ids),
+        *((cid, (qid,)) for cid in case_ids for qid in QUESTIONS),
+    ]
 
-    assert comparison.batched_requests == 2
-    assert comparison.split_requests == 4
-    assert comparison.batched_usage_tokens == 20
-    assert comparison.split_usage_tokens == 32
+
+def test_mock_fanout_compares_cost_latency_and_match(tmp_path: Path) -> None:
+    _batched, _split, comparison, batched_path, split_path = run_fanout_pair(
+        CASES, QUESTIONS, _execute, log_dir=tmp_path
+    )
+    assert batched_path != split_path
+    assert (
+        comparison.batched_requests,
+        comparison.split_requests,
+        comparison.batched_usage_tokens,
+        comparison.split_usage_tokens,
+    ) == (2, 4, 20, 32)
     assert comparison.batched_latency_ms == pytest.approx(10.0)
     assert comparison.split_latency_ms == pytest.approx(16.0)
-    assert comparison.compared == 4
-    assert comparison.matched == 4
+    assert (comparison.compared, comparison.matched) == (4, 4)
     assert comparison.match_rate == pytest.approx(1.0)
 
 
