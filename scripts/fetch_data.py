@@ -23,9 +23,6 @@ def main(
         typer.echo(str(exc), err=True)
         raise typer.Exit(code=1) from exc
     typer.echo(f"取得完了: {raw_dir}")
-    if checked == 0:
-        typer.echo("台帳が無いのでハッシュ照合をスキップした")
-        return
     typer.echo(f"ハッシュ照合 OK ({checked} 件)")
 
 

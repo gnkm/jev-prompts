@@ -23,7 +23,7 @@ from jev_prompts.data.fetch import (
     verify_ledgers,
 )
 from jev_prompts.data.hashutil import content_hash
-from jev_prompts.data.ledger import write_ledger
+from jev_prompts.data.ledger import read_ledger, write_ledger
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -221,10 +221,33 @@ def test_missing_raw_case_fails(tmp_path: Path) -> None:
         verify_ledgers(raw_root, cases_root)
 
 
-def test_verify_without_ledger_is_noop(tmp_path: Path) -> None:
+def test_verify_without_ledger_fails(tmp_path: Path) -> None:
     raw_root = tmp_path / "raw"
     fetch_datasets(raw_root, transport=FakeTransport(_remote_payloads()))
-    assert verify_ledgers(raw_root, tmp_path / "cases") == 0
+    with pytest.raises(FetchError, match="照合する台帳が無い"):
+        verify_ledgers(raw_root, tmp_path / "cases")
+
+
+def test_empty_ledger_fails(tmp_path: Path) -> None:
+    raw_root = tmp_path / "raw"
+    cases_root = tmp_path / "cases"
+    fetch_datasets(raw_root, transport=FakeTransport(_remote_payloads()))
+    path = cases_root / "choice.jsonl"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("", encoding="utf-8")
+    with pytest.raises(FetchError, match="台帳が空"):
+        verify_ledgers(raw_root, cases_root)
+
+
+def test_repo_ledgers_have_at_least_one_case() -> None:
+    ledgers = sorted((REPO_ROOT / "data" / "cases").glob("*.jsonl"))
+    assert ledgers, "data/cases に照合用の台帳が無い"
+    total = 0
+    for path in ledgers:
+        df = read_ledger(path)
+        assert df.height >= 1, path
+        total += df.height
+    assert total >= 1
 
 
 def test_esci_index_is_english_us_only(tmp_path: Path) -> None:

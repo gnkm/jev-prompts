@@ -148,14 +148,18 @@ def fetch_datasets(raw_root: Path, *, transport: Transport | None = None) -> lis
 
 
 def verify_ledgers(raw_root: Path, cases_root: Path) -> int:
-    """台帳の各行について raw 本文ハッシュを照合する。不一致なら失敗する。"""
+    """台帳の各行について raw 本文ハッシュを照合する。不一致・台帳なしは失敗する。"""
     ledgers = sorted(cases_root.glob("*.jsonl"))
     if not ledgers:
-        return 0
+        raise FetchError(f"照合する台帳が無い: {cases_root}")
     cache: dict[TaskId, dict[str, dict[str, Any]]] = {}
     checked = 0
     for path in ledgers:
+        if path.stat().st_size == 0:
+            raise FetchError(f"台帳が空: {path}")
         df = read_ledger(path)
+        if df.height == 0:
+            raise FetchError(f"台帳が空: {path}")
         for row in df.to_dicts():
             task = _require_task(str(row["task"]))
             if task not in cache:
@@ -169,6 +173,8 @@ def verify_ledgers(raw_root: Path, cases_root: Path) -> int:
             if actual != expected:
                 raise HashMismatchError(f"ハッシュ不一致: {row['case_id']}")
             checked += 1
+    if checked == 0:
+        raise FetchError(f"照合できたケースが無い: {cases_root}")
     return checked
 
 
