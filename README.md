@@ -159,14 +159,15 @@ uv run python -m jev_prompts fetch
 評価設計書の L1 / L2 に L3 を足し、実験は 8 条件である。選定の正本は
 [ADR-0002](docs/adr/competitor-llm.md)、実装上の境界は [ARCHITECTURE.md](ARCHITECTURE.md)。
 
-| 条件 | モデル | モデル ID | 固定プロバイダ |
+| 条件 | モデル | モデル ID | provider.order |
 | --- | --- | --- | --- |
-| L1 / L2 | GPT-5.6 Luna | `openai/gpt-5.6-luna` | OpenAI |
-| L3 | Claude Sonnet 5 | `anthropic/claude-sonnet-5` | Anthropic |
+| L1 / L2 | GPT-5.6 Luna | `openai/gpt-5.6-luna` | OpenAI, Azure |
+| L3 | Claude Sonnet 5 | `anthropic/claude-sonnet-5` | Anthropic, Amazon Bedrock |
 
-OpenRouter で呼び、`provider.order` を上表のプロバイダに固定する。
+OpenRouter で呼び、`provider.order` を上表の順に固定する。第一希望が地域フィルタで落ちても、リスト内の次だけを使う。
 `allow_fallbacks` は false、`require_parameters` は true、`data_collection` は deny。
-エイリアスは使わない。
+temperature は送らない（対応エンドポイントが無く 404 になる）。Luna は `seed` を付け、Sonnet は付けない。
+エイリアスは使わない。実応答のプロバイダをログに残す。
 
 ## OpenRouter クライアント
 

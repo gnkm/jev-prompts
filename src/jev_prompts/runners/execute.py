@@ -21,9 +21,10 @@ from jev_prompts.clients import (
 )
 from jev_prompts.config import (
     LUNA_MODEL_ID,
-    LUNA_PROVIDER,
+    LUNA_PROVIDERS,
+    MAIN_SEED,
     SONNET_MODEL_ID,
-    SONNET_PROVIDER,
+    SONNET_PROVIDERS,
     provider_routing,
 )
 from jev_prompts.prompts.catalog import JEV_CONDITIONS, load_bundle
@@ -128,10 +129,10 @@ def _from_llm(
     )
 
 
-def _chat_pair(condition: str) -> tuple[str, str]:
+def _chat_route(condition: str) -> tuple[str, tuple[str, ...], int | None]:
     if condition == "L3":
-        return SONNET_MODEL_ID, SONNET_PROVIDER
-    return LUNA_MODEL_ID, LUNA_PROVIDER
+        return SONNET_MODEL_ID, SONNET_PROVIDERS, None
+    return LUNA_MODEL_ID, LUNA_PROVIDERS, MAIN_SEED
 
 
 def execute_case(
@@ -163,9 +164,9 @@ def execute_case(
         if bundle.llm_messages is None:
             raise ValueError(f"{condition} に llm_messages が無い")
         messages = materialize_messages(case.task, bundle.llm_messages, record)
-        model, provider = _chat_pair(condition)
+        model, providers, seed = _chat_route(condition)
         result = client.chat_completions(
-            model=model, messages=messages, provider=provider
+            model=model, messages=messages, provider=providers, seed=seed
         )
         latency_ms = (time.perf_counter() - started) * 1000
         return _from_llm(
@@ -173,7 +174,7 @@ def execute_case(
             condition,
             result,
             messages=messages,
-            routing=provider_routing(provider),
+            routing=provider_routing(providers),
             latency_ms=latency_ms,
         )
     except (OpenRouterError, ValueError) as exc:

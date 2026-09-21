@@ -26,6 +26,7 @@ from jev_prompts.config import (
     JEV_MODEL_ID,
     LUNA_MODEL_ID,
     LUNA_PROVIDER,
+    LUNA_PROVIDERS,
     OPENROUTER_BASE_URL,
     SONNET_MODEL_ID,
     SONNET_PROVIDER,
@@ -172,6 +173,41 @@ def test_chat_completions_pins_luna_and_sonnet_providers(
     assert sonnet_body["provider"]["order"] == [SONNET_PROVIDER]
     assert luna.label == "ham"
     assert sonnet.confidence == 0.5
+    assert "temperature" not in luna_body
+    assert "seed" not in luna_body
+
+
+def test_chat_completions_accepts_provider_order_list(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content.decode())
+        return _json_response(
+            {
+                "model": body["model"],
+                "provider": body["provider"]["order"][1],
+                "choices": [
+                    {
+                        "message": {
+                            "content": json.dumps({"label": "ham", "confidence": 0.2})
+                        }
+                    }
+                ],
+            }
+        )
+
+    client, captured = _client(monkeypatch, handler)
+    result = client.chat_completions(
+        model=LUNA_MODEL_ID,
+        messages=[{"role": "user", "content": "hi"}],
+        provider=LUNA_PROVIDERS,
+        seed=20260921,
+    )
+    body = json.loads(captured[0].content.decode())
+    assert body["provider"]["order"] == list(LUNA_PROVIDERS)
+    assert body["seed"] == 20260921
+    assert "temperature" not in body
+    assert result.provider == "Azure"
 
 
 def test_mismatched_model_provider_rejected_before_http(
