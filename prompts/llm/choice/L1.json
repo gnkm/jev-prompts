@@ -1,0 +1,10 @@
+{
+  "task": "choice",
+  "condition": "L1",
+  "llm_messages": [
+    {
+      "role": "user",
+      "content": "Classify the customer message into one label. Reply with JSON {\"label\": \"...\", \"confidence\": 0.0}.\nLabels: card_payment_fee_charged, cash_withdrawal_charge\nMessage: {{query}}"
+    }
+  ]
+}

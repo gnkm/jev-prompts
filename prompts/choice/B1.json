@@ -1,0 +1,17 @@
+{
+  "task": "choice",
+  "condition": "B1",
+  "state": {
+    "query": ""
+  },
+  "questions": {
+    "intent": {
+      "type": "choice",
+      "instructions": "Analyze this customer message and determine what they need.",
+      "criteria": {
+        "card_payment_fee_charged": null,
+        "cash_withdrawal_charge": null
+      }
+    }
+  }
+}

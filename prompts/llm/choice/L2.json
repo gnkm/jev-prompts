@@ -1,0 +1,14 @@
+{
+  "task": "choice",
+  "condition": "L2",
+  "llm_messages": [
+    {
+      "role": "system",
+      "content": "You are a banking intent classifier. card_payment_fee_charged is a fee on a card payment, not an ATM withdrawal. cash_withdrawal_charge is a fee on cash withdrawal, not a card purchase. Return JSON {\"label\": string, \"confidence\": number}."
+    },
+    {
+      "role": "user",
+      "content": "Examples:\n1. \"Why was I charged extra for paying by card?\" -> card_payment_fee_charged\n2. \"The ATM charged me a fee\" -> cash_withdrawal_charge\n3. \"I want to order pizza\" -> pick the closest listed label\nMessage: {{query}}"
+    }
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "task": "score",
+  "condition": "A",
+  "state": {
+    "query": "",
+    "product": {
+      "title": "",
+      "description": ""
+    }
+  },
+  "questions": {
+    "relevance": {
+      "type": "score",
+      "instructions": "How well does `product` match what the shopper asked for in `query`?",
+      "criteria": [
+        "Unrelated to what the query asks for",
+        "A different item that is used together with what the query asks for, such as an accessory, refill, or case",
+        "A different item that could be bought instead of what the query asks for and would serve the same purpose",
+        "The item the query asks for, matching every attribute the query names"
+      ]
+    }
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "task": "choice",
+  "condition": "B2",
+  "state": {
+    "query": ""
+  },
+  "questions": {
+    "intent": {
+      "type": "choice",
+      "instructions": "Which intent best matches the customer's request in `query`?",
+      "criteria": {
+        "card_payment_fee_charged": "Fees and charges",
+        "cash_withdrawal_charge": "Fees and charges"
+      }
+    }
+  }
+}

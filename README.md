@@ -13,6 +13,7 @@ Python パッケージ `jev_prompts` の骨格（uv / pytest / Ruff / Typer / Po
 パッケージは `report → stats → metrics → runners → prompts → clients → data → config` の一方向レイヤで、Import Linter が逆向きの import を止める。
 ケース台帳は `case_id` / split / gold / content_hash / 抽出シードを Polars で扱う。本文は同梱しない。
 `scripts/fetch_data.py` が BANKING77 / Amazon ESCI / SMS Spam を `data/raw/` へ取得し、台帳のハッシュと照合する。
+プロンプトの正本は `prompts/` の JSON である。`src/jev_prompts/prompts` はそこを読むだけで、A からの 1 軸差分を Python でその場生成しない。各タイプ 1 問のフィクスチャ（77 意図は後続）。
 GitHub Actions は Biome、pytest、Ruff、Import Linter、reuse lint を `main` と pull request で実行する。ライブ API と実ネットでのデータ取得は既定の CI に載せない。
 
 ## セットアップ
@@ -33,6 +34,16 @@ uv run ruff format --check .
 uv run lint-imports
 uv run reuse lint
 ```
+
+## プロンプト
+
+実験条件の正本は `prompts/` にある。課題タイプ（`choice` / `score` / `noul`）ごとに A〜C、比較用 LLM は `prompts/llm/<task>/` に L1〜L3 を置く。
+
+- B2 は A と `instructions` が同一で、`criteria` だけが違う。
+- C は A と `questions` が同一で、`state` のキーだけが増える。
+- ランナーはカタログを読み、欠けた `questions` を A から補完しない。
+
+読み出しは `jev_prompts.prompts.load_bundle`。中身の改訂は JSON を編集する。
 
 ## データ
 

@@ -1,0 +1,18 @@
+{
+  "task": "score",
+  "condition": "B1",
+  "state": {
+    "query": "",
+    "product": {
+      "title": "",
+      "description": ""
+    }
+  },
+  "questions": {
+    "relevance": {
+      "type": "score",
+      "instructions": "Rate how relevant this product is.",
+      "criteria": ["1", "2", "3", "4"]
+    }
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "task": "score",
+  "condition": "L1",
+  "llm_messages": [
+    {
+      "role": "user",
+      "content": "Rate product relevance for the query as I, C, S, or E. Reply with JSON {\"label\": \"...\", \"confidence\": 0.0}.\nQuery: {{query}}\nProduct: {{product}}"
+    }
+  ]
+}
