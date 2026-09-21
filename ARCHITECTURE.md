@@ -196,7 +196,8 @@ REUSE の SPDX 識別子をファイルに付け、`reuse lint` で検証する�
 ├── results/                  CC BY 4.0  測定値のみ。入力本文を置かない
 └── docs/
     ├── source-of-truth/      人間のみ編集
-    └── adr/
+    ├── adr/
+    └── statistical-methods.md  検定の解説（高校範囲）
 ```
 
 `prompts/` は実験条件の正本であり、`src/` はそれを読むだけにする。
@@ -327,6 +328,14 @@ LLM（条件 L1 / L2）。
 
 検定は対応あり前提。独立 2 標本は使わない。
 
+### 統計
+
+判定と区間の出し方は、次の 3 手法に分ける。ライブラリの使い方ではなく、何を判定するか、なぜ対応のある比較と補正が要るかは [docs/statistical-methods.md](docs/statistical-methods.md) を読む。
+
+- **McNemar**: 同じケースを 2 条件で見たときの当たり外れの差を見る。例は条件 A 対 条件 B1。
+- **ブートストラップ**: 再標本で正答率などの指標の区間を出す。
+- **Holm**: 同じデータで A 対 B1、A 対 B2 のように何度も検定するときの補正である。
+
 公開物は `results/` の markdown である。読む対象は常にそのファイルで、画像単体や
 別アプリを開く必要はない。設計書が求める 3 種は、Polars で組んだ表に加え、
 作図ライブラリで出した図を同じ markdown から参照する。ライブラリは固定しない。
@@ -391,6 +400,7 @@ CI は上の静的検証とユニットテストまで。有料 API を叩く本
 
 - [仕様草案](docs/source-of-truth/01-seed.md)
 - [評価設計書](docs/source-of-truth/design-of-evaluation.md)
+- [統計手法の解説](docs/statistical-methods.md)
 - [プロンプト作法](docs/source-of-truth/jev-prompt-guide.md)
 - [ADR-0001 データセット選定](docs/adr/datasets.md)
 - [データセットのライセンス](DATA_LICENSES.md)
