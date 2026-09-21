@@ -10,6 +10,7 @@ Jev に 3 つの課題を与え、精度の評価をおこなう。
 表の処理は Polars を使う。
 
 Python パッケージ `jev_prompts` の骨格（uv / pytest / Ruff / Typer / Polars）はある。CLI と集計の本実装は後続。
+ケース台帳は `case_id` / split / gold / content_hash / 抽出シードを Polars で扱う。本文は同梱しない、fetch は後続。
 GitHub Actions は Biome、pytest、Ruff を `main` と pull request で実行する。ライブ API は既定の CI に載せない。
 
 ## セットアップ
@@ -28,6 +29,12 @@ uv run pytest
 uv run ruff check .
 uv run ruff format --check .
 ```
+
+## データ
+
+本文は同梱しない。`data/raw/` は gitignore し、配布元からの fetch は後続の Issue で足す。
+Git に入るのはケース台帳（`data/cases/` の `case_id` / split / gold / content_hash / 抽出シード）だけである。
+抽出は課題あたりランダム + 境界、gold で層化した dev / test を小さなフィクスチャで再現する。
 
 ## 比較用 LLM
 
