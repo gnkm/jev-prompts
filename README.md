@@ -7,6 +7,21 @@ Jev に 3 つの課題を与え、精度の評価をおこなう。
 図が必要な箇所は画像を生成してそのファイルから参照する。Web UI は提供しない。
 表の処理は Polars を使う。
 
+## 比較用 LLM
+
+比較用 LLM は GPT-5.6 Luna（条件 L1 / L2）と Claude Sonnet 5（条件 L3）。
+評価設計書の L1 / L2 に L3 を足し、実験は 8 条件である。選定の正本は
+[ADR-0002](docs/adr/competitor-llm.md)、実装上の境界は [ARCHITECTURE.md](ARCHITECTURE.md)。
+
+| 条件 | モデル | モデル ID | 固定プロバイダ |
+| --- | --- | --- | --- |
+| L1 / L2 | GPT-5.6 Luna | `openai/gpt-5.6-luna` | OpenAI |
+| L3 | Claude Sonnet 5 | `anthropic/claude-sonnet-5` | Anthropic |
+
+OpenRouter で呼び、`provider.order` を上表のプロバイダに固定する。
+`allow_fallbacks` は false、`require_parameters` は true、`data_collection` は deny。
+エイリアスは使わない。
+
 ## 評価の統計
 
 同じケースを条件 A 対 B1 のように 2 条件で比べるときは、当たり外れの差に McNemar、指標の幅にブートストラップ、複数回の判定に Holm を使う。解説は [docs/statistical-methods.md](docs/statistical-methods.md)、位置づけは [ARCHITECTURE.md](ARCHITECTURE.md) の統計節。

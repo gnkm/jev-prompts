@@ -5,7 +5,8 @@ Jev プロンプト実験の実装地図。実験の仮説・条件・指標の�
 **コードとディレクトリに落とすときの境界**だけを定める。
 
 プロンプト作法そのものは [jev-prompt-guide](docs/source-of-truth/jev-prompt-guide.md)、
-データセット選定は [ADR-0001](docs/adr/datasets.md)、ライセンスの帰属は
+データセット選定は [ADR-0001](docs/adr/datasets.md)、比較用 LLM は
+[ADR-0002](docs/adr/competitor-llm.md)、ライセンスの帰属は
 [DATA_LICENSES.md](DATA_LICENSES.md) を正本とする。
 
 ## 1. 目的と範囲
@@ -69,9 +70,13 @@ flowchart LR
 - Jev は Chat Completions では呼べない。`state` と typed `questions`
   （`choice` / `score` / `noul`）を `POST https://openrouter.ai/api/v1/systemone`
   に送る。モデル ID は `typesafe/jev-1.13` に固定し、`~typesafe/jev-latest` は使わない。
-- 比較用 LLM（L1 / L2 / L3）は同じホストの Chat Completions。L1 と L2 は
-  GPT-5.6 Luna、L3 は Claude Sonnet 5（L2 のプロンプトを固定してモデルだけ変える）。
-  実応答のバージョンをログに残す。
+- 比較用 LLM（L1 / L2 / L3）は同じホストの Chat Completions。モデル ID は
+  L1 / L2 が `openai/gpt-5.6-luna`（GPT-5.6 Luna、provider は OpenAI）、
+  L3 が `anthropic/claude-sonnet-5`（Claude Sonnet 5、provider は Anthropic）。
+  L3 は L2 のプロンプトを固定してモデルだけ変える。エイリアスは使わない。
+  プロバイダは `order` で固定し、`allow_fallbacks` は false、
+  `require_parameters` は true、`data_collection` は deny。
+  実応答のモデル名とプロバイダをログに残す。
 - レスポンスの `model` は OpenRouter 側の正規名（例: `typesafe/jev-1.13-20260917`）
   で記録する。事前確認でパッチバージョンを固定したことになる。
 - TypeSafe の非公開ドキュメント・料金情報は顧客契約上の機密であり、
@@ -218,7 +223,7 @@ REUSE の SPDX 識別子をファイルに付け、`reuse lint` で検証する�
 
 ```text
 TaskId        = choice | score | noul
-ConditionId   = A | B1 | B2 | B3 | C | L1 | L2
+ConditionId   = A | B1 | B2 | B3 | C | L1 | L2 | L3
 Split         = dev | test
 
 Case
@@ -231,7 +236,8 @@ PromptBundle
 
 RequestLog          # 1 リクエスト 1 行。再集計の正本（ローカル）
   case_id, task, condition, split
-  model, request_id
+  model, provider, request_id
+  routing_json             # provider.order / allow_fallbacks / require_parameters / data_collection
   state_json, question_json
   answer               # choice | score | noul
   probabilities, confidence
@@ -313,13 +319,23 @@ Jev（条件 A〜C）。
 
 LLM（条件 L1 / L2 / L3）。
 
-- L1: GPT-5.6 Luna。タスク 1 文 + ラベル一覧 + 「ラベル名だけ返せ」
-- L2: GPT-5.6 Luna。役割、A の criteria の散文化、混同ペア、JSON スキーマ、few-shot 3 件
-- L3: Claude Sonnet 5。L2 のプロンプトを固定してモデルだけ変える
-- 出力は `{"label": "…", "confidence": 0.0-1.0}`。パース失敗は不正解、再試行なし
-- 主測定は temperature 0。ばらつき測定は既定温度で 5 回
-- 77 意図を毎回送るため、プロンプトキャッシュあり/なしのコストを両方記録する
-- A と L2 の作成時間を記録し、工数を揃えたことをレポートに書く
+| 条件 | モデル | モデル ID | provider.order | プロンプト |
+| --- | --- | --- | --- | --- |
+| L1 | GPT-5.6 Luna | `openai/gpt-5.6-luna` | OpenAI | タスク 1 文 + ラベル一覧 + 「ラベル名だけ返せ」 |
+| L2 | GPT-5.6 Luna | `openai/gpt-5.6-luna` | OpenAI | 役割、A の criteria の散文化、混同ペア、JSON スキーマ、few-shot 3 件 |
+| L3 | Claude Sonnet 5 | `anthropic/claude-sonnet-5` | Anthropic | L2 と同一（モデルだけ変える） |
+
+呼び出しは全条件で次を付ける。付けないと測定対象がプロンプトではなくルーティングになる。
+
+- `provider.allow_fallbacks`: false（既定の true のままでは `order` は希望にすぎない）
+- `provider.require_parameters`: true（false だと構造化出力非対応エンドポイントでスキーマが無視される）
+- `provider.data_collection`: deny
+- 主測定は temperature 0、`seed` は `20260921`。ばらつき測定は既定温度で 5 回
+- `~openai/gpt-luna-latest` のようなエイリアスは使わない
+
+出力は `{"label": "…", "confidence": 0.0-1.0}`。パース失敗は不正解、再試行なし。
+77 意図を毎回送るため、プロンプトキャッシュあり/なしのコストを両方記録する。
+A と L2 の作成時間を記録し、工数を揃えたことをレポートに書く。
 
 比較の公平性はランナーではなくカタログと記録の問題である。L2 をコード生成の
 省略形にしない。
@@ -393,6 +409,8 @@ CI は上の静的検証とユニットテストまで。有料 API を叩く本
 - データセット本文・フルログの Git 管理。
 - `~typesafe/jev-latest` および TypeSafe 直の `jev-latest` への追従。
   途中で向き先が変わり得る。
+- 比較用 LLM の `-latest` エイリアス、およびプロバイダ未固定
+  （`allow_fallbacks: true`）での呼び出し。
 - `api.typesafe.ai` への直接呼び出し、および TypeSafe SDK への依存。
 - Jev を Chat Completions で呼ぶこと。OpenRouter 上でも Decisions / System One 専用である。
 - ライブ API を含むテストをデフォルト CI にすること。
@@ -408,7 +426,10 @@ CI は上の静的検証とユニットテストまで。有料 API を叩く本
 - [統計手法の解説](docs/statistical-methods.md)
 - [プロンプト作法](docs/source-of-truth/jev-prompt-guide.md)
 - [ADR-0001 データセット選定](docs/adr/datasets.md)
+- [ADR-0002 比較対象とする LLM の選定](docs/adr/competitor-llm.md)
 - [データセットのライセンス](DATA_LICENSES.md)
 - [REUSE Specification 3.3](https://reuse.software/spec-3.3/)
 - [OpenRouter: Jev 1.13](https://openrouter.ai/typesafe/jev-1.13)
+- [OpenRouter: GPT-5.6 Luna](https://openrouter.ai/openai/gpt-5.6-luna)
+- [OpenRouter: Claude Sonnet 5](https://openrouter.ai/anthropic/claude-sonnet-5)
 - [OpenRouter: TypeSafe SDK 互換](https://openrouter.ai/docs/guides/community/typesafe-sdk)
