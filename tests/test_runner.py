@@ -275,6 +275,12 @@ def test_assert_resume_matches_accepts_patched_model() -> None:
     assert_resume_matches(existing, CASES[:1])
 
 
+def test_assert_resume_matches_rejects_other_model_family() -> None:
+    existing = local_frame([_log(CASES[0], "A", model="typesafe/jev-1.130")])
+    with pytest.raises(LogSchemaError, match="model"):
+        assert_resume_matches(existing, CASES[:1])
+
+
 def test_assert_resume_matches_rejects_model_mismatch() -> None:
     existing = local_frame([_log(CASES[0], "A", model="openai/gpt-5.6-luna")])
     with pytest.raises(LogSchemaError, match="model"):

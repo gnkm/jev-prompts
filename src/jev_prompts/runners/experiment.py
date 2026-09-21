@@ -104,8 +104,8 @@ def expected_run_model(condition: str) -> str:
 
 
 def _model_compatible(logged: str, expected: str) -> bool:
-    """API が返すパッチ付き ID を、要求モデルの系列として認める。"""
-    return logged == expected or logged.startswith(expected)
+    """API が返すパッチ付き ID（`{expected}-YYYYMMDD`）を認める。"""
+    return logged == expected or logged.startswith(f"{expected}-")
 
 
 def assert_resume_matches(
