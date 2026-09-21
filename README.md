@@ -16,6 +16,7 @@ Python パッケージ `jev_prompts` の骨格（uv / pytest / Ruff / Typer / Po
 `scripts/fetch_data.py` が BANKING77 / Amazon ESCI / SMS Spam を `data/raw/` へ取得し、台帳のハッシュと照合する。
 プロンプトの正本は `prompts/` の JSON である。`src/jev_prompts/prompts` はそこを読むだけで、A からの 1 軸差分を Python でその場生成しない。Choice の A は BANKING77 の 77 意図と `other`、B1 / B2 は 77 意図のみ。L2 の作成時間は `prompts/creation_time.json` に分で残す。
 実験ランナーはケースごとに全条件を連続実行し、1 リクエスト 1 行を Polars で書く。`probabilities` は必須。`state_json` / `question_json` は `data/logs/` のローカルログだけに置き、公開用 `PublishedRecord` に本文キーは無い。
+投機的 fan-out は精度比較と同一ランに入れない。A の質問をまとめて 1 回と分割して n 回の別ランとし、コスト・遅延・一致率だけを比べる。2 経路のログは `data/logs/fanout-batched.jsonl` と `data/logs/fanout-split.jsonl` に分かれ、本ランの `eval.jsonl` やその集計には混ざらない。
 GitHub Actions は Biome、pytest、Ruff、Import Linter、Xenon、reuse lint を `main` と pull request で実行する。ライブ API と実ネットでのデータ取得は既定の CI に載せない。
 
 ## セットアップ
@@ -66,6 +67,14 @@ uv run reuse lint
 - `probabilities` は全件必須。落とすと Score の解釈ができない。
 - 再集計用のフルログ（`state_json` / `question_json` を含む）は `data/logs/` に書く。gitignore 済みでコミットしない。
 - 公開用の `PublishedRecord` は本文キーを持たない。`content_hash` と測定値だけを `results/` に置く。
+
+投機的 fan-out は精度比較と混ぜない。`run_fanout_pair` が A の質問群を「1 リクエストにまとめる」経路と「質問ごとに n 回分割する」経路で別実行し、トークン・遅延・答えの一致率だけを出す。ログは `fanout-batched.jsonl` と `fanout-split.jsonl` の別ファイルで、本ランの `eval.jsonl` とはパスも `routing_json.fanout_path` も違う。集計前に混ざっても `drop_fanout_rows` が fan-out 行を除く。
+
+モックで 2 経路のログを書く（ライブ API は既定の CI に載せない）:
+
+```bash
+uv run python scripts/run_fanout.py --mock --log-dir data/logs
+```
 
 ライブ API は既定の CI に載せない。ランナーのユニットテストは execute を差し込み、実行順とスキーマだけを固定する。
 
