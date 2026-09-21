@@ -9,6 +9,7 @@ __pycache__/
 *$py.class
 .pytest_cache/
 .ruff_cache/
+.import_linter_cache/
 *.egg-info/
 dist/
 build/

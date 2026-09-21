@@ -10,8 +10,9 @@ Jev に 3 つの課題を与え、精度の評価をおこなう。
 表の処理は Polars を使う。
 
 Python パッケージ `jev_prompts` の骨格（uv / pytest / Ruff / Typer / Polars）はある。CLI と集計の本実装は後続。
+パッケージは `report → stats → metrics → runners → prompts → clients → data → config` の一方向レイヤで、Import Linter が逆向きの import を止める。
 ケース台帳は `case_id` / split / gold / content_hash / 抽出シードを Polars で扱う。本文は同梱しない、fetch は後続。
-GitHub Actions は Biome、pytest、Ruff、reuse lint を `main` と pull request で実行する。ライブ API は既定の CI に載せない。
+GitHub Actions は Biome、pytest、Ruff、Import Linter、reuse lint を `main` と pull request で実行する。ライブ API は既定の CI に載せない。
 
 ## セットアップ
 
@@ -28,6 +29,7 @@ uv sync
 uv run pytest
 uv run ruff check .
 uv run ruff format --check .
+uv run lint-imports
 uv run reuse lint
 ```
 
