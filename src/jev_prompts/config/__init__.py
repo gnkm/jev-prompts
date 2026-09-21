@@ -4,6 +4,12 @@
 
 """パス・モデル名・閾値。秘匿情報は置かない。"""
 
+from jev_prompts.config.metrics import (
+    CONFIDENT_THRESHOLD,
+    ECE_BINS,
+    NOUL_DECISION_THRESHOLD,
+    TOKENS_PER_THOUSAND,
+)
 from jev_prompts.config.openrouter import (
     API_KEY_ENV,
     CHAT_COMPLETIONS_PATH,
@@ -37,9 +43,13 @@ __all__ = [
     "CASES_DIR",
     "CHAT_COMPLETIONS_PATH",
     "CHAT_MODELS",
+    "CONFIDENT_THRESHOLD",
     "CONTEXT_WINDOW_TOKENS",
     "DETERMINISM_SAMPLE_SIZE",
+    "ECE_BINS",
     "JEV_MODEL_ID",
+    "NOUL_DECISION_THRESHOLD",
+    "TOKENS_PER_THOUSAND",
     "LOCAL_LOGS_DIR",
     "LUNA_MODEL_ID",
     "LUNA_PROVIDER",
