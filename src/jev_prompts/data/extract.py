@@ -126,7 +126,9 @@ def _assign_splits(
     return assigned
 
 
-def extract_cases(pool: pl.DataFrame, *, task: str, config: ExtractConfig) -> pl.DataFrame:
+def extract_cases(
+    pool: pl.DataFrame, *, task: str, config: ExtractConfig
+) -> pl.DataFrame:
     """小さなプールからケース台帳行を作る。本文列は出力に含めない。"""
     task_id = _require_task(task)
     if pool.height == 0:
