@@ -6,7 +6,8 @@ Jev プロンプト実験の実装地図。実験の仮説・条件・指標の�
 
 プロンプト作法そのものは [jev-prompt-guide](docs/source-of-truth/jev-prompt-guide.md)、
 データセット選定は [ADR-0001](docs/adr/datasets.md)、比較用 LLM は
-[ADR-0002](docs/adr/competitor-llm.md)、ライセンスの帰属は
+[ADR-0002](docs/adr/competitor-llm.md)、LLM の確信度を分布から導出しない判断は
+[ADR-0003](docs/adr/llm-confidence.md)、ライセンスの帰属は
 [DATA_LICENSES.md](DATA_LICENSES.md) を正本とする。
 
 ## 1. 目的と範囲
@@ -450,6 +451,7 @@ JavaScript 側は `pnpm exec biome ci .`。`results/figures/` の SVG は対象�
 - [プロンプト作法](docs/source-of-truth/jev-prompt-guide.md)
 - [ADR-0001 データセット選定](docs/adr/datasets.md)
 - [ADR-0002 比較対象とする LLM の選定](docs/adr/competitor-llm.md)
+- [ADR-0003 LLM の確信度を確率分布から導出しない](docs/adr/llm-confidence.md)
 - [データセットのライセンス](DATA_LICENSES.md)
 - [REUSE Specification 3.3](https://reuse.software/spec-3.3/)
 - [OpenRouter: Jev 1.13](https://openrouter.ai/typesafe/jev-1.13)
