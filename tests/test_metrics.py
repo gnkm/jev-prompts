@@ -11,7 +11,12 @@ from pathlib import Path
 import polars as pl
 import pytest
 
-from jev_prompts.metrics import METRIC_COLUMNS, MetricsError, aggregate_metrics
+from jev_prompts.metrics import (
+    METRIC_COLUMNS,
+    MetricsError,
+    aggregate_metrics,
+    prepare_cases,
+)
 from jev_prompts.runners import RequestLog, local_frame, to_published
 
 HASH_A = "a" * 64
@@ -266,6 +271,7 @@ def test_ece_ten_bins_matches_hand_calculation() -> None:
                 gold="a",
                 answer="a",
                 confidence=0.15,
+                probabilities={"a": 0.15, "b": 0.85},
             ),
             _log(
                 case_id="c1",
@@ -273,6 +279,7 @@ def test_ece_ten_bins_matches_hand_calculation() -> None:
                 gold="a",
                 answer="b",
                 confidence=0.25,
+                probabilities={"b": 0.25, "a": 0.75},
             ),
             _log(
                 case_id="c2",
@@ -280,6 +287,7 @@ def test_ece_ten_bins_matches_hand_calculation() -> None:
                 gold="a",
                 answer="a",
                 confidence=0.21,
+                probabilities={"a": 0.21, "b": 0.79},
             ),
             _log(
                 case_id="c3",
@@ -287,6 +295,7 @@ def test_ece_ten_bins_matches_hand_calculation() -> None:
                 gold="a",
                 answer="a",
                 confidence=0.95,
+                probabilities={"a": 0.95, "b": 0.05},
             ),
         ]
     )
@@ -435,6 +444,125 @@ def test_rejects_non_finite_confidence() -> None:
 def test_missing_columns_raise() -> None:
     with pytest.raises(MetricsError, match="必須列"):
         aggregate_metrics(pl.DataFrame({"task": ["choice"]}))
+
+
+def test_choice_ece_uses_adopted_label_probability() -> None:
+    logs = local_frame(
+        [
+            _log(
+                case_id="c0",
+                task="choice",
+                gold="ham",
+                answer="ham",
+                confidence=0.99,
+                probabilities={"ham": 0.60, "spam": 0.40},
+            ),
+            _log(
+                case_id="c1",
+                task="choice",
+                gold="ham",
+                answer="spam",
+                confidence=0.99,
+                probabilities={"spam": 0.20, "ham": 0.80},
+            ),
+        ]
+    )
+    row = _row(aggregate_metrics(logs), task="choice")
+    expected = 0.5 * abs(1.0 - 0.60) + 0.5 * abs(0.0 - 0.20)
+    assert row["ece"] == pytest.approx(expected)
+    assert row["brier"] == pytest.approx(((0.60 - 1.0) ** 2 + (0.20 - 0.0) ** 2) / 2)
+    prepared = prepare_cases(logs)
+    assert prepared["cal_probability"].to_list() == pytest.approx([0.60, 0.20])
+    assert prepared["confidence"].to_list() == pytest.approx([0.99, 0.99])
+
+
+def test_score_ece_uses_rounded_stage_not_mode() -> None:
+    logs = local_frame(
+        [
+            _log(
+                case_id="s0",
+                task="score",
+                gold=2,
+                answer=2.46,
+                confidence=0.46,
+                probabilities={"0": 0.03, "1": 0.01, "2": 0.41, "3": 0.55},
+            )
+        ]
+    )
+    row = _row(aggregate_metrics(logs), task="score")
+    assert round(2.46) == 2
+    assert row["ece"] == pytest.approx(abs(1.0 - 0.41))
+    assert row["brier"] == pytest.approx((0.41 - 1.0) ** 2)
+    prepared = prepare_cases(logs)
+    assert prepared["cal_probability"][0] == pytest.approx(0.41)
+    assert prepared["score_stage"][0] == 2
+
+
+def test_jev_noul_ece_uses_max_p_when_confidence_is_null() -> None:
+    logs = local_frame(
+        [
+            _log(
+                case_id="n0",
+                task="noul",
+                gold="yes",
+                answer=0.2,
+                confidence=None,
+                probabilities={"yes": 0.2, "no": 0.8},
+            )
+        ]
+    )
+    row = _row(aggregate_metrics(logs), task="noul")
+    assert row["ece"] == pytest.approx(abs(0.0 - 0.8))
+    assert row["brier"] == pytest.approx((0.8 - 0.0) ** 2)
+    prepared = prepare_cases(logs)
+    assert prepared["confidence"][0] is None
+    assert prepared["cal_probability"][0] == pytest.approx(0.8)
+
+
+def test_llm_noul_ece_uses_self_reported_confidence() -> None:
+    logs = local_frame(
+        [
+            _log(
+                case_id="n0",
+                task="noul",
+                gold="yes",
+                answer="spam",
+                confidence=0.7,
+                probabilities={"label": 0.3},
+            )
+        ]
+    )
+    row = _row(aggregate_metrics(logs), task="noul")
+    assert row["ece"] == pytest.approx(abs(1.0 - 0.7))
+    assert row["brier"] == pytest.approx((0.7 - 1.0) ** 2)
+    prepared = prepare_cases(logs)
+    assert prepared["cal_probability"][0] == pytest.approx(0.7)
+    assert prepared["pred"][0] == pytest.approx(1.0)
+
+
+def test_signal_auroc_ranks_correct_above_incorrect() -> None:
+    logs = local_frame(
+        [
+            _log(
+                case_id="c0",
+                task="choice",
+                gold="ham",
+                answer="ham",
+                confidence=0.9,
+                probabilities={"ham": 0.6, "spam": 0.4},
+            ),
+            _log(
+                case_id="c1",
+                task="choice",
+                gold="ham",
+                answer="spam",
+                confidence=0.1,
+                probabilities={"spam": 0.55, "ham": 0.45},
+            ),
+        ]
+    )
+    row = _row(aggregate_metrics(logs), task="choice")
+    assert row["signal_auroc"] == pytest.approx(1.0)
 
 
 def test_design_doc_defines_metrics() -> None:

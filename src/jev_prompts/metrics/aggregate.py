@@ -6,7 +6,8 @@
 
 from __future__ import annotations
 
-from typing import Final
+import json
+from typing import Any, Final
 
 import polars as pl
 
@@ -34,6 +35,8 @@ METRIC_COLUMNS: Final[tuple[str, ...]] = (
     "auc",
     "confident_error_rate",
     "ece",
+    "brier",
+    "signal_auroc",
     "tokens_per_1000",
     "latency_p50_ms",
     "latency_p95_ms",
@@ -45,7 +48,9 @@ _OPTIONAL: Final[tuple[str, ...]] = (
     "usage_tokens",
     "latency_ms",
     "error",
+    "probabilities",
 )
+_LLM_PROB_KEY: Final = "label"
 
 _SCORE_GOLD_STR: Final[dict[str, str]] = {
     **{label: str(value) for label, value in SCORE_GOLD.items()},
@@ -88,6 +93,9 @@ def aggregate_metrics(logs: pl.DataFrame) -> pl.DataFrame:
         mae=_mae_expr(),
         spearman=_spearman_expr(),
         confident_error_rate=pl.col("confident_error").mean(),
+        brier=(
+            (pl.col("cal_probability") - pl.col("correct").cast(pl.Float64)).pow(2)
+        ).mean(),
         tokens_per_1000=(pl.col("usage_tokens").mean() * TOKENS_PER_THOUSAND),
         latency_p50_ms=pl.col("latency_ms").quantile(
             LATENCY_P50, interpolation=_QUANTILE_INTERPOLATION
@@ -99,6 +107,7 @@ def aggregate_metrics(logs: pl.DataFrame) -> pl.DataFrame:
     return (
         grouped.join(_auc_by_group(prepared), on=list(GROUP_KEYS), how="left")
         .join(_ece_by_group(prepared), on=list(GROUP_KEYS), how="left")
+        .join(_signal_auroc_by_group(prepared), on=list(GROUP_KEYS), how="left")
         .select(list(METRIC_COLUMNS))
     )
 
@@ -118,6 +127,8 @@ def _result_schema() -> dict[str, pl.DataType]:
         "auc": pl.Float64,
         "confident_error_rate": pl.Float64,
         "ece": pl.Float64,
+        "brier": pl.Float64,
+        "signal_auroc": pl.Float64,
         "tokens_per_1000": pl.Float64,
         "latency_p50_ms": pl.Float64,
         "latency_p95_ms": pl.Float64,
@@ -164,7 +175,7 @@ def prepare_cases(logs: pl.DataFrame) -> pl.DataFrame:
         .otherwise(pl.lit(False))
     )
     noul_conf = pl.max_horizontal(pred, pl.lit(1.0) - pred)
-    cal_confidence = (
+    threshold_signal = (
         pl.when(pl.col("confidence").is_not_null())
         .then(pl.col("confidence"))
         .when(pl.col("task") == "noul")
@@ -185,8 +196,12 @@ def prepare_cases(logs: pl.DataFrame) -> pl.DataFrame:
         gold_yes=gold_yes,
         has_error=has_error,
         correct=correct,
-        cal_confidence=cal_confidence,
+        score_stage=pred.round(0).cast(pl.Int64, strict=False),
+        threshold_signal=threshold_signal,
         confident_error=confident & ~correct,
+    )
+    prepared = prepared.with_columns(
+        cal_probability=_cal_probability_expr(),
     )
     _require_unit_interval(prepared)
     score_valid = (
@@ -234,10 +249,14 @@ def _pred_expr(has_error: pl.Expr) -> pl.Expr:
 
 
 def _require_unit_interval(prepared: pl.DataFrame) -> None:
-    """Noul の予測と confidence は有限な [0, 1]。Score の連続値は対象外。"""
+    """Noul の予測と confidence / 較正の確率は有限な [0, 1]。Score の連続値は対象外。"""
     _reject_outside_unit(
         prepared.filter(pl.col("confidence").is_not_null())["confidence"],
         "confidence",
+    )
+    _reject_outside_unit(
+        prepared.filter(pl.col("cal_probability").is_not_null())["cal_probability"],
+        "較正の確率",
     )
     noul = prepared.filter(
         (pl.col("task") == "noul") & pl.col("pred").is_not_null() & ~pl.col("has_error")
@@ -283,17 +302,26 @@ def _auc_by_group(prepared: pl.DataFrame) -> pl.DataFrame:
         & pl.col("gold_yes").is_not_null()
         & ~pl.col("has_error")
     )
+    return _pairwise_auc_by_group(noul, score="pred", label="gold_yes", name="auc")
+
+
+def _signal_auroc_by_group(prepared: pl.DataFrame) -> pl.DataFrame:
+    scored = prepared.filter(pl.col("threshold_signal").is_not_null())
+    return _pairwise_auc_by_group(
+        scored, score="threshold_signal", label="correct", name="signal_auroc"
+    )
+
+
+def _pairwise_auc_by_group(
+    frame: pl.DataFrame, *, score: str, label: str, name: str
+) -> pl.DataFrame:
     empty = pl.DataFrame(
-        schema={**{k: pl.String for k in GROUP_KEYS}, "auc": pl.Float64}
+        schema={**{k: pl.String for k in GROUP_KEYS}, name: pl.Float64}
     )
-    if noul.height == 0:
+    if frame.height == 0:
         return empty
-    pos = noul.filter(pl.col("gold_yes")).select(
-        *GROUP_KEYS, pl.col("pred").alias("pos")
-    )
-    neg = noul.filter(~pl.col("gold_yes")).select(
-        *GROUP_KEYS, pl.col("pred").alias("neg")
-    )
+    pos = frame.filter(pl.col(label)).select(*GROUP_KEYS, pl.col(score).alias("pos"))
+    neg = frame.filter(~pl.col(label)).select(*GROUP_KEYS, pl.col(score).alias("neg"))
     if pos.height == 0 or neg.height == 0:
         return empty
     pairs = pos.join(neg, on=list(GROUP_KEYS), how="inner")
@@ -301,12 +329,12 @@ def _auc_by_group(prepared: pl.DataFrame) -> pl.DataFrame:
         return empty
     wins = (pl.col("pos") > pl.col("neg")).cast(pl.Float64)
     ties = (pl.col("pos") == pl.col("neg")).cast(pl.Float64)
-    return pairs.group_by(list(GROUP_KEYS)).agg(auc=(wins + 0.5 * ties).mean())
+    return pairs.group_by(list(GROUP_KEYS)).agg(**{name: (wins + 0.5 * ties).mean()})
 
 
 def _ece_by_group(prepared: pl.DataFrame) -> pl.DataFrame:
     scored = prepared.filter(
-        pl.col("cal_confidence").is_not_null() & pl.col("correct").is_not_null()
+        pl.col("cal_probability").is_not_null() & pl.col("correct").is_not_null()
     )
     empty = pl.DataFrame(
         schema={**{k: pl.String for k in GROUP_KEYS}, "ece": pl.Float64}
@@ -315,7 +343,7 @@ def _ece_by_group(prepared: pl.DataFrame) -> pl.DataFrame:
         return empty
     last_bin = ECE_BINS - 1
     binned = scored.with_columns(
-        bin=(pl.col("cal_confidence") * ECE_BINS)
+        bin=(pl.col("cal_probability") * ECE_BINS)
         .floor()
         .clip(0, last_bin)
         .cast(pl.Int8)
@@ -324,9 +352,79 @@ def _ece_by_group(prepared: pl.DataFrame) -> pl.DataFrame:
     per_bin = binned.group_by([*GROUP_KEYS, "bin"]).agg(
         n_bin=pl.len(),
         acc=pl.col("correct").mean(),
-        conf=pl.col("cal_confidence").mean(),
+        conf=pl.col("cal_probability").mean(),
     )
     weighted = per_bin.join(totals, on=list(GROUP_KEYS), how="inner").with_columns(
         w=(pl.col("n_bin") / pl.col("n_cal")) * (pl.col("acc") - pl.col("conf")).abs()
     )
     return weighted.group_by(list(GROUP_KEYS)).agg(ece=pl.col("w").sum())
+
+
+def _cal_probability_expr() -> pl.Expr:
+    return pl.struct(
+        "task",
+        "answer",
+        "pred",
+        "confidence",
+        "probabilities",
+        "score_stage",
+        "has_error",
+    ).map_elements(_cal_probability_row, return_dtype=pl.Float64)
+
+
+def _cal_probability_row(row: dict[str, Any]) -> float | None:
+    """採用した答えの確率。LLM の {"label": ...} は分布にしない。"""
+    if row.get("has_error"):
+        return None
+    probs = _as_prob_dict(row.get("probabilities"))
+    if probs is None:
+        return None
+    if _LLM_PROB_KEY in probs:
+        conf = row.get("confidence")
+        return None if conf is None else float(conf)
+    task = row.get("task")
+    if task == "choice":
+        answer = row.get("answer")
+        if answer is None:
+            return None
+        value = probs.get(str(answer))
+        return None if value is None else float(value)
+    if task == "score":
+        stage = row.get("score_stage")
+        if stage is None:
+            return None
+        value = probs.get(str(int(stage)))
+        return None if value is None else float(value)
+    if task == "noul":
+        pred = row.get("pred")
+        if pred is None:
+            return None
+        p = float(pred)
+        return max(p, 1.0 - p)
+    return None
+
+
+def _as_prob_dict(raw: object) -> dict[str, float] | None:
+    if raw is None:
+        return None
+    if isinstance(raw, dict):
+        parsed: dict[str, Any] = raw
+    elif isinstance(raw, str):
+        if raw == "":
+            return None
+        try:
+            loaded = json.loads(raw)
+        except json.JSONDecodeError:
+            return None
+        if not isinstance(loaded, dict):
+            return None
+        parsed = loaded
+    else:
+        return None
+    out: dict[str, float] = {}
+    for key, value in parsed.items():
+        try:
+            out[str(key)] = float(value)
+        except (TypeError, ValueError):
+            return None
+    return out

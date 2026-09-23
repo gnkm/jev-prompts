@@ -56,3 +56,35 @@ def pairwise_auc(pairs: Sequence[object]) -> float | None:
                 total += 0.5
             count += 1
     return total / count
+
+
+def expected_calibration_error(
+    pairs: Sequence[object], *, n_bins: int = 10
+) -> float | None:
+    """較正の確率と正誤の ECE。空ビンは重み 0。"""
+    scored: list[tuple[float, float]] = []
+    for item in pairs:
+        prob, correct = item  # type: ignore[misc]
+        if prob is None or correct is None:
+            continue
+        scored.append((float(prob), 1.0 if bool(correct) else 0.0))
+    if not scored:
+        return None
+    last = n_bins - 1
+    bins: list[list[tuple[float, float]]] = [[] for _ in range(n_bins)]
+    for prob, yes in scored:
+        idx = int(prob * n_bins)
+        if idx < 0:
+            idx = 0
+        elif idx > last:
+            idx = last
+        bins[idx].append((prob, yes))
+    n = len(scored)
+    total = 0.0
+    for bucket in bins:
+        if not bucket:
+            continue
+        acc = sum(yes for _prob, yes in bucket) / len(bucket)
+        conf = sum(prob for prob, _yes in bucket) / len(bucket)
+        total += (len(bucket) / n) * abs(acc - conf)
+    return total

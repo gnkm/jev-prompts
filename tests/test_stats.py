@@ -201,6 +201,52 @@ def test_score_mae_difference_has_ci() -> None:
     assert row["p_raw"] is not None
 
 
+def test_ece_difference_has_paired_bootstrap_ci() -> None:
+    logs: list[RequestLog] = []
+    for i in range(4):
+        cid = f"e{i}"
+        logs.append(
+            _log(
+                case_id=cid,
+                task="choice",
+                gold="ham",
+                answer="ham",
+                condition="A",
+                confidence=0.9,
+            )
+        )
+        logs.append(
+            _log(
+                case_id=cid,
+                task="choice",
+                gold="ham",
+                answer="spam" if i < 2 else "ham",
+                condition="B1",
+                confidence=0.9,
+            )
+        )
+    # overwrite probabilities via local_frame after constructing with defaults
+    frame = local_frame(logs).with_columns(
+        pl.when(pl.col("condition") == "A")
+        .then(pl.lit('{"ham":0.9,"spam":0.1}'))
+        .otherwise(
+            pl.when(pl.col("answer") == "ham")
+            .then(pl.lit('{"ham":0.6,"spam":0.4}'))
+            .otherwise(pl.lit('{"spam":0.6,"ham":0.4}'))
+        )
+        .alias("probabilities")
+    )
+    paired = compare_paired(frame, n_bootstrap=200)
+    row = _row(paired, task="choice", metric="ece", other="B1")
+    assert row["method"] == "bootstrap"
+    assert row["ci_low"] is not None
+    assert row["ci_high"] is not None
+    assert float(row["ci_low"]) <= float(row["difference"]) <= float(row["ci_high"])
+    conf_row = _row(paired, task="choice", metric="confidence", other="B1")
+    assert conf_row["metric"] == "confidence"
+    assert conf_row["difference"] == pytest.approx(0.0)
+
+
 def test_noul_accuracy_is_mcnemar() -> None:
     logs: list[RequestLog] = []
     for i in range(4):
