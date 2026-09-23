@@ -363,10 +363,12 @@ A と L2 の作成時間を記録し、工数を揃えたことをレポート�
 - **ブートストラップ**: 再標本で正答率などの指標の区間を出す。
 - **Holm**: 同じデータで A 対 B1、A 対 B2 のように何度も検定するときの補正である。
 
-公開物は `results/` の markdown である。読む対象は常にそのファイルで、画像単体や
-別アプリを開く必要はない。`python -m jev_prompts report`（薄い入口は
-`scripts/write_report.py`）が `results/report.md` と図を書く。設計書が求める 3 種は、Polars で組んだ表に加え、
-作図ライブラリで出した図を同じ markdown から参照する。ライブラリは固定しない。
+読む対象は `results/report.md` である。本文は結果を見て書き、コマンドでは作らない。
+`python -m jev_prompts report`（薄い入口は `scripts/write_report.py`）が書くのは
+`results/tables.md` と図だけであり、`report.md` は上書きしない。
+設計書が求める 3 種は、Polars で組んだ表に加え、作図ライブラリで出した図である。
+ライブラリは固定しない。表と図は `tables.md` と `results/figures/` に置き、
+報告に載せる数値と読みは `report.md` に写す。
 
 1. 課題ごとの条件 × 指標マトリクス（信頼区間付き）
 2. 条件別の較正（10 ビンの表と reliability diagram 画像。ECE を併記）

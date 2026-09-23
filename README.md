@@ -29,28 +29,27 @@
 | Score | 段階の定義。隣り合う段階を状況として区別して書く | 質問文、判断に関係ない入力 |
 | Noul | 質問を否定形にしない | 条件の定義の細部、判断に関係ない入力 |
 
-ガイドが重視する confidence は、ガイドに沿ったプロンプトでも自信のある誤答を減らさなかった。
+ガイドが重視する confidence は、ガイドに沿ったプロンプトでも確信度の高い誤答を減らさなかった。
 素朴な LLM と同等以上の精度をより低いコストと遅延で出せるかは、本測定では判定できなかった。
 
-数値・信頼区間・誤答の内訳は [results/findings.md](results/findings.md)。
+数値・信頼区間・誤答の内訳は [results/report.md](results/report.md)。
 
 ## ドキュメントガイド
 
 | 目的 | ドキュメント |
 | --- | --- |
-| プロンプトの効果を知る | [results/findings.md](results/findings.md) |
+| プロンプトの効果を知る | [results/report.md](results/report.md) |
 | 実験を手元で再現する | 本ドキュメントの「再現」セクション |
 | 本システムを開発する | [ARCHITECTURE.md](ARCHITECTURE.md) と [CONTRIBUTING.md](CONTRIBUTING.md) |
 
 主指標と合格ラインは [評価設計書](docs/source-of-truth/design-of-evaluation.md)。
-測定ファイルの置き方は [results/README.md](results/README.md)。
 プロンプト条件の差分は [prompts/README.md](prompts/README.md)。
 比較用 LLM の選定は [ADR-0002](docs/adr/competitor-llm.md)。
 
 ## 成果物
 
 - 課題 3 式（Choice / Score / Noul）: `data/cases/choice.jsonl`、`data/cases/score.jsonl`、`data/cases/noul.jsonl`。課題の定義は評価設計書
-- 実験結果: `results/findings.md`、`results/report.md`、`results/figures/`
+- 実験結果: `results/report.md`（本文は結果を見て書く）、`results/tables.md`（表）、`results/figures/`
 - プロンプト: `prompts/`
 - 推論用コード: `src/jev_prompts/clients/`、`src/jev_prompts/runners/`
 - 精度評価用コード: `src/jev_prompts/metrics/`、`src/jev_prompts/stats/`、`src/jev_prompts/report/`
@@ -92,12 +91,11 @@ uv run python -m jev_prompts run --split test
 uv run python -m jev_prompts fanout
 uv run python -m jev_prompts prices
 
-# 公開物の再生成（API キーは不要）
+# 表と図の再生成（report.md は上書きしない。API キーは不要）
 uv run python -m jev_prompts report
-uv run python -m jev_prompts findings
 ```
 
-キーが要るのは `preflight` / `run` / `fanout` / `prices`。要らないのは `fetch` / `extract` / `report` / `findings`。
+キーが要るのは `preflight` / `run` / `fanout` / `prices`。要らないのは `fetch` / `extract` / `report`。
 ライブ API は既定の CI に載せない。ランナー、ログ、エンドポイントの境界は [ARCHITECTURE.md](ARCHITECTURE.md)。
 
 ## ライセンス

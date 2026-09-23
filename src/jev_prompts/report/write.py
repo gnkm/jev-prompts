@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: MIT
 
-"""公開行から results/ へ markdown と図を書く。"""
+"""公開行から測定表と図を書く。report.md は書かない。"""
 
 from __future__ import annotations
 
@@ -10,6 +10,7 @@ import shutil
 import tempfile
 from collections.abc import Iterable
 from dataclasses import dataclass
+from datetime import date
 from pathlib import Path
 
 import polars as pl
@@ -17,13 +18,16 @@ import polars as pl
 from jev_prompts.config import BOOTSTRAP_REPLICATES, CI_LEVEL, STATS_SEED
 from jev_prompts.data.schema import BODY_COLUMNS
 from jev_prompts.metrics import aggregate_metrics
+from jev_prompts.report.a_errors import classify_a_errors
 from jev_prompts.report.calibration import calibration_table
 from jev_prompts.report.forbidden import reject_forbidden_files, reject_forbidden_text
 from jev_prompts.report.intervals import metric_intervals
 from jev_prompts.report.plots import write_task_figures
-from jev_prompts.report.render import render_report
+from jev_prompts.report.prices import ModelPrice
+from jev_prompts.report.render import noul_hash_note, render_tables
 from jev_prompts.runners.fanout import drop_fanout_rows
 from jev_prompts.runners.schema import REQUEST_LOG_COLUMNS, to_published
+from jev_prompts.stats.compare import compare_paired
 
 _MANAGED_FIGURE_PREFIXES = ("reliability-", "cost-accuracy-")
 
@@ -34,6 +38,14 @@ class WrittenReport:
     figures: tuple[Path, ...]
 
 
+def eval_logs(logs: pl.DataFrame) -> pl.DataFrame:
+    """報告に使う行は test。fan-out 行は混ぜない。"""
+    frame = drop_fanout_rows(logs)
+    if "split" in frame.columns:
+        return frame.filter(pl.col("split") == "test")
+    return frame
+
+
 def write_report(
     logs: pl.DataFrame,
     dest: Path,
@@ -41,8 +53,11 @@ def write_report(
     n_bootstrap: int = BOOTSTRAP_REPLICATES,
     ci_level: float = CI_LEVEL,
     seed: int = STATS_SEED,
+    prices: tuple[ModelPrice, ...] | None = None,
+    measured_on: date | None = None,
+    errors: pl.DataFrame | None = None,
 ) -> WrittenReport:
-    """指標マトリクス・較正・コスト×精度を markdown と図に書く。"""
+    """測定表（tables.md）と図を書く。report.md は触らない。"""
     dest = dest.resolve()
     dest.mkdir(parents=True, exist_ok=True)
     staging = Path(tempfile.mkdtemp(prefix=".report-staging-", dir=dest))
@@ -53,6 +68,9 @@ def write_report(
             n_bootstrap=n_bootstrap,
             ci_level=ci_level,
             seed=seed,
+            prices=prices,
+            measured_on=measured_on or date.today(),
+            errors=errors,
         )
         installed_md, installed_figs = _install_report(dest, markdown, figures)
     finally:
@@ -67,6 +85,9 @@ def _build_report(
     n_bootstrap: int,
     ci_level: float,
     seed: int,
+    prices: tuple[ModelPrice, ...] | None,
+    measured_on: date,
+    errors: pl.DataFrame | None,
 ) -> tuple[Path, list[Path]]:
     figures_dir = staging / "figures"
     figures_dir.mkdir(parents=True, exist_ok=True)
@@ -77,15 +98,26 @@ def _build_report(
     )
     calib = calibration_table(frame)
     figures = _write_figures(metrics, calib, figures_dir)
-    text = render_report(
+    counted = errors if errors is not None else classify_a_errors(frame)
+    paired = (
+        compare_paired(frame, n_bootstrap=n_bootstrap, ci_level=ci_level, seed=seed)
+        if frame.height
+        else pl.DataFrame()
+    )
+    text = render_tables(
         metrics=metrics,
         intervals=intervals,
         calib=calib,
         figures=figures,
         dest=staging,
+        paired=paired,
+        errors=counted,
+        prices=prices,
+        measured_on=measured_on,
+        note=noul_hash_note(frame),
     )
-    reject_forbidden_text(text, source="report.md")
-    markdown = staging / "report.md"
+    reject_forbidden_text(text, source="tables.md")
+    markdown = staging / "tables.md"
     markdown.write_text(text, encoding="utf-8")
     reject_forbidden_files((markdown, *figures))
     return markdown, figures
@@ -97,7 +129,7 @@ def _install_report(
     figures_dir = dest / "figures"
     figures_dir.mkdir(parents=True, exist_ok=True)
     installed = [_replace_file(src, figures_dir / src.name) for src in figures]
-    published = _replace_file(markdown, dest / "report.md")
+    published = _replace_file(markdown, dest / "tables.md")
     keep = {path.name for path in installed}
     _clear_managed_figures(figures_dir, keep=keep)
     return published, installed

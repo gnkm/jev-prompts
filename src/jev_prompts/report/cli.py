@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: MIT
 
-"""公開 markdown レポートの Typer コマンド。"""
+"""測定表と図、および単価表の Typer コマンド。"""
 
 from __future__ import annotations
 
@@ -17,14 +17,13 @@ from jev_prompts.clients import MissingApiKeyError
 from jev_prompts.config import BOOTSTRAP_REPLICATES, RESULTS_DIR
 from jev_prompts.report.a_errors import read_error_review
 from jev_prompts.report.errors import ReportError
-from jev_prompts.report.findings import eval_logs, write_findings
 from jev_prompts.report.prices import (
     fetch_prices,
     read_measured_on,
     read_prices_markdown,
     write_prices,
 )
-from jev_prompts.report.write import write_report
+from jev_prompts.report.write import eval_logs, write_report
 from jev_prompts.runners.cli import app
 from jev_prompts.runners.schema import LogSchemaError, read_published_records
 
@@ -39,14 +38,30 @@ def report_command(
     results_dir: ResultsDir = RESULTS_DIR,
     n_bootstrap: BootstrapN = BOOTSTRAP_REPLICATES,
 ) -> None:
-    """公開行から指標マトリクス・較正・コスト×精度の markdown を書く。"""
+    """公開行から測定表と図を書く。report.md は上書きしない。"""
     if not published.is_file():
         typer.echo(f"公開行が無い: {published}", err=True)
         raise typer.Exit(code=1)
     try:
-        logs = read_published_records(published)
-        written = write_report(logs, results_dir, n_bootstrap=n_bootstrap)
-    except (LogSchemaError, ReportError, OSError) as exc:
+        logs = eval_logs(read_published_records(published))
+        prices_path = results_dir / "prices.md"
+        if prices_path.is_file():
+            prices = read_prices_markdown(prices_path)
+            measured_on = read_measured_on(prices_path) or date.today()
+        else:
+            prices = None
+            measured_on = date.today()
+        review_path = results_dir / "a_error_review.jsonl"
+        errors = read_error_review(review_path, logs) if review_path.is_file() else None
+        written = write_report(
+            logs,
+            results_dir,
+            n_bootstrap=n_bootstrap,
+            prices=prices,
+            measured_on=measured_on,
+            errors=errors,
+        )
+    except (LogSchemaError, ReportError, OSError, ValueError) as exc:
         typer.echo(str(exc), err=True)
         raise typer.Exit(code=1) from exc
     typer.echo(f"markdown: {written.markdown}")
@@ -72,36 +87,3 @@ def prices_command(
         typer.echo(str(exc), err=True)
         raise typer.Exit(code=1) from exc
     typer.echo(f"prices: {path}")
-
-
-@app.command("findings")
-def findings_command(
-    published: PublishedPath = RESULTS_DIR / "published.jsonl",
-    results_dir: ResultsDir = RESULTS_DIR,
-) -> None:
-    """H1〜H4 と A の誤答内訳を findings.md に書く。本文は出さない。"""
-    if not published.is_file():
-        typer.echo(f"公開行が無い: {published}", err=True)
-        raise typer.Exit(code=1)
-    try:
-        logs = eval_logs(read_published_records(published))
-        prices_path = results_dir / "prices.md"
-        if prices_path.is_file():
-            prices = read_prices_markdown(prices_path)
-            measured_on = read_measured_on(prices_path) or date.today()
-        else:
-            prices = None
-            measured_on = date.today()
-        review_path = results_dir / "a_error_review.jsonl"
-        errors = read_error_review(review_path, logs) if review_path.is_file() else None
-        path = write_findings(
-            logs,
-            results_dir / "findings.md",
-            prices=prices,
-            measured_on=measured_on,
-            errors=errors,
-        )
-    except (LogSchemaError, ReportError, OSError, ValueError) as exc:
-        typer.echo(str(exc), err=True)
-        raise typer.Exit(code=1) from exc
-    typer.echo(f"findings: {path}")

@@ -15,3 +15,5 @@ dist/
 build/
 data/raw/
 data/logs/
+
+docs/source-of-truth/jev-docs/

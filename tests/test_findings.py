@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: MIT
 
-"""H1〜H4 報告に本文キーが残らないこと。"""
+"""誤答の分類と、test 分割だけを残すこと。"""
 
 from datetime import date
 from pathlib import Path
@@ -14,9 +14,10 @@ from jev_prompts.report.a_errors import (
     classify_a_errors,
     read_error_review,
 )
-from jev_prompts.report.findings import eval_logs, render_findings, write_findings
 from jev_prompts.report.forbidden import FORBIDDEN_TOKENS
 from jev_prompts.report.prices import ModelPrice, read_prices_markdown, render_prices
+from jev_prompts.report.render import noul_hash_note
+from jev_prompts.report.write import eval_logs
 from jev_prompts.runners import published_frame
 from test_report import HASH_A, _log
 
@@ -64,43 +65,13 @@ def test_classify_call_failed() -> None:
     assert classify_a_error(row) == "call_failed"
 
 
-def test_render_findings_omits_forbidden_tokens(tmp_path: Path) -> None:
-    logs = [
-        _log(case_id="c0", task="choice", gold="a", answer="a", condition="A"),
-        _log(case_id="c0", task="choice", gold="a", answer="b", condition="B1"),
-        _log(case_id="c1", task="choice", gold="a", answer="a", condition="A"),
-        _log(case_id="c1", task="choice", gold="a", answer="a", condition="B1"),
-        _log(
-            case_id="c0",
-            task="choice",
-            gold="a",
-            answer="a",
-            condition="L1",
-            usage_tokens=80,
-        ),
-    ]
-    published = published_frame(logs)
-    prices = (
-        ModelPrice(
-            model_id="typesafe/jev-1.13",
-            prompt_per_million=0.042,
-            completion_per_million=0.0,
-        ),
+def test_classify_a_errors_omits_body_columns() -> None:
+    published = published_frame(
+        [
+            _log(case_id="c0", task="choice", gold="a", answer="a", condition="A"),
+            _log(case_id="c0", task="choice", gold="a", answer="b", condition="B1"),
+        ]
     )
-    text = render_findings(published, prices=prices, measured_on=date(2026, 9, 21))
-    for token in FORBIDDEN_TOKENS:
-        assert token not in text
-    assert "測定日: 2026-09-21" in text
-    assert "## 測定単価" in text
-    assert "0.042" in text
-    assert "## H1" in text
-    assert "## H4" in text
-    assert "欠けた課題: score, noul" in text
-    assert "- 判定: 判定不能" in text
-    path = write_findings(
-        published, tmp_path / "findings.md", measured_on=date(2026, 9, 21)
-    )
-    assert path.is_file()
     errors = classify_a_errors(published)
     assert "state_json" not in errors.columns
 
@@ -144,30 +115,9 @@ def test_eval_logs_keeps_only_test_split() -> None:
     )
     filtered = eval_logs(logs)
     assert set(filtered["split"].to_list()) == {"test"}
-    text = render_findings(logs, measured_on=date(2026, 9, 21))
-    assert "choice: top1 A=1.000 B1=0.000" in text
 
 
-def test_h4_is_undecidable_unless_all_tasks_compare() -> None:
-    logs = published_frame(
-        [
-            _log(case_id="c0", task="choice", gold="a", answer="a", condition="A"),
-            _log(
-                case_id="c0",
-                task="choice",
-                gold="a",
-                answer="a",
-                condition="L1",
-                usage_tokens=80,
-            ),
-        ]
-    )
-    text = render_findings(logs, measured_on=date(2026, 9, 21))
-    assert "欠けた課題: score, noul" in text
-    assert "3 課題そろわないため判定不能" in text
-
-
-def test_findings_notes_duplicate_noul_hash() -> None:
+def test_noul_hash_note_records_duplicates() -> None:
     logs = published_frame(
         [
             _log(case_id="noul:1", task="noul", gold="yes", answer=0.9),
@@ -176,7 +126,7 @@ def test_findings_notes_duplicate_noul_hash() -> None:
     )
     assert logs["content_hash"].n_unique() == 1
     assert logs["content_hash"][0] == HASH_A
-    text = render_findings(logs, measured_on=date(2026, 9, 21))
+    text = noul_hash_note(logs)
     assert "content_hash が一意 1 件" in text
     assert "同一本文の重複" in text
 
