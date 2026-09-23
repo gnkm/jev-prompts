@@ -107,20 +107,26 @@ def test_write_report_links_figures_and_omits_body(tmp_path: Path) -> None:
     text = written.markdown.read_text(encoding="utf-8")
     assert written.markdown.name == "tables.md"
     assert "](figures/reliability-choice.svg)" in text
-    assert "](figures/risk-coverage-choice.svg)" in text
+    assert "risk-coverage" not in text
     assert "](figures/cost-accuracy-choice.svg)" in text
     assert "測定表" in text
     assert "概要" not in text
     assert "考察" not in text
-    assert (dest / "figures/reliability-choice.svg").is_file()
-    assert (dest / "figures/risk-coverage-choice.svg").is_file()
-    assert (dest / "figures/cost-accuracy-choice.svg").is_file()
+    reliability = dest / "figures/reliability-choice.svg"
+    cost = dest / "figures/cost-accuracy-choice.svg"
+    assert reliability.is_file()
+    assert not (dest / "figures/risk-coverage-choice.svg").exists()
+    assert cost.is_file()
+    assert "L1" not in reliability.read_text(encoding="utf-8")
+    assert "L1" in cost.read_text(encoding="utf-8")
+    calib = text.split("#### 較正", maxsplit=1)[1].split("#### コスト", maxsplit=1)[0]
+    assert "| L1 |" not in calib
     assert "top1" in text
     assert "error_rate" in text
     assert "n_primary" in text
     assert "ECE" in text or "ece" in text
     assert "brier" in text
-    assert "signal_auroc" in text
+    assert "signal_auroc" not in text
     assert "mean_probability" in text
     assert "mean_confidence" not in text
     assert "tokens_per_1000" in text

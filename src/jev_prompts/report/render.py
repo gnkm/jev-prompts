@@ -12,7 +12,7 @@ from pathlib import Path
 
 import polars as pl
 
-from jev_prompts.prompts.catalog import CONDITIONS
+from jev_prompts.prompts.catalog import CONDITIONS, LLM_CONDITIONS
 from jev_prompts.report.a_errors import MODE_LABELS
 from jev_prompts.report.intervals import PRIMARY_METRIC
 from jev_prompts.report.prices import ModelPrice, render_price_table
@@ -24,7 +24,6 @@ def render_tables(
     metrics: pl.DataFrame,
     intervals: pl.DataFrame,
     calib: pl.DataFrame,
-    ranking: pl.DataFrame,
     figures: Sequence[Path],
     dest: Path,
     paired: pl.DataFrame,
@@ -55,7 +54,6 @@ def render_tables(
                 metrics=_task_frame(metrics, task),
                 intervals=_task_frame(intervals, task),
                 calib=_task_frame(calib, task),
-                ranking=_task_frame(ranking, task),
                 figures=figures,
                 dest=dest,
             )
@@ -75,16 +73,12 @@ def _task_section(
     metrics: pl.DataFrame,
     intervals: pl.DataFrame,
     calib: pl.DataFrame,
-    ranking: pl.DataFrame,
     figures: Sequence[Path],
     dest: Path,
 ) -> list[str]:
     primary = PRIMARY_METRIC.get(task, "top1")
     reliability = _figure_link(
         figures, dest, f"reliability-{task}.svg", f"{task} reliability"
-    )
-    coverage = _figure_link(
-        figures, dest, f"risk-coverage-{task}.svg", f"{task} risk coverage"
     )
     cost = _figure_link(
         figures, dest, f"cost-accuracy-{task}.svg", f"{task} cost accuracy"
@@ -101,12 +95,6 @@ def _task_section(
         _calibration_md(calib),
         "",
         reliability,
-        "",
-        "#### risk-coverage",
-        "",
-        _ranking_md(ranking),
-        "",
-        coverage,
         "",
         "#### コスト × 精度",
         "",
@@ -199,7 +187,9 @@ def _fmt_count(value: object) -> str:
 def _matrix_table(
     task: str, metrics: pl.DataFrame, intervals: pl.DataFrame, primary: str
 ) -> str:
-    frame = _attach_ci(metrics, intervals, primary, "primary_ci")
+    frame = _blank_llm_calibration(
+        _attach_ci(metrics, intervals, primary, "primary_ci")
+    )
     columns = ["condition", "n", "n_primary", "error_rate", primary, "primary_ci"]
     labels = {"primary_ci": f"{primary} CI"}
     formatters: dict[str, object] = {
@@ -210,7 +200,6 @@ def _matrix_table(
         "confident_error_rate": fmt_float,
         "ece": fmt_float,
         "brier": fmt_float,
-        "signal_auroc": fmt_float,
         "tokens_per_1000": fmt_float,
         "latency_p50_ms": fmt_float,
         "latency_p95_ms": fmt_float,
@@ -225,7 +214,6 @@ def _matrix_table(
             "confident_error_rate",
             "ece",
             "brier",
-            "signal_auroc",
             "tokens_per_1000",
             "latency_p50_ms",
             "latency_p95_ms",
@@ -267,6 +255,23 @@ def _attach_ci(
     return joined.with_columns(pl.Series(alias, cis)).drop(f"{alias}_lo", f"{alias}_hi")
 
 
+def _blank_llm_calibration(frame: pl.DataFrame) -> pl.DataFrame:
+    """LLM の自己申告は較正にも確信度の高い誤答率にも載せない。"""
+    if frame.height == 0 or "condition" not in frame.columns:
+        return frame
+    llm = pl.col("condition").is_in(list(LLM_CONDITIONS))
+    names = [
+        name
+        for name in ("confident_error_rate", "ece", "brier")
+        if name in frame.columns
+    ]
+    if not names:
+        return frame
+    return frame.with_columns(
+        [pl.when(llm).then(None).otherwise(pl.col(name)).alias(name) for name in names]
+    )
+
+
 def _calibration_md(calib: pl.DataFrame) -> str:
     if calib.height == 0:
         return "較正に使える確率が無い。"
@@ -290,21 +295,6 @@ def _calibration_md(calib: pl.DataFrame) -> str:
             "mean_probability": fmt_float,
             "accuracy": fmt_float,
             "ece": fmt_float,
-        },
-    )
-
-
-def _ranking_md(ranking: pl.DataFrame) -> str:
-    if ranking.height == 0:
-        return "閾値の信号が無い。"
-    return markdown_table(
-        _sort_conditions(ranking),
-        ["condition", "coverage", "n_kept", "accuracy", "risk"],
-        formatters={
-            "coverage": fmt_float,
-            "n_kept": fmt_int,
-            "accuracy": fmt_float,
-            "risk": fmt_float,
         },
     )
 
