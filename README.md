@@ -49,7 +49,7 @@
 ## 成果物
 
 - 課題 3 式（Choice / Score / Noul）: `data/cases/choice.jsonl`、`data/cases/score.jsonl`、`data/cases/noul.jsonl`。課題の定義は評価設計書
-- 実験結果: `results/report.md`（本文は結果を見て書く）、`results/tables.md`（表）、`results/figures/`
+- 実験結果: `results/report.md`（本文は結果を見て書く）、`results/figures/`。表は `python -m jev_prompts report` が `results/tables.md` に書く。このファイルはリポジトリに含めない
 - プロンプト: `prompts/`
 - 推論用コード: `src/jev_prompts/clients/`、`src/jev_prompts/runners/`
 - 精度評価用コード: `src/jev_prompts/metrics/`、`src/jev_prompts/stats/`、`src/jev_prompts/report/`

@@ -13,7 +13,7 @@ from pathlib import Path
 import polars as pl
 
 from jev_prompts.prompts.catalog import CONDITIONS
-from jev_prompts.report.a_errors import MODE_LABELS, MODE_MEANINGS
+from jev_prompts.report.a_errors import MODE_LABELS
 from jev_prompts.report.intervals import PRIMARY_METRIC
 from jev_prompts.report.prices import ModelPrice, render_price_table
 from jev_prompts.report.tables import fmt_ci, fmt_float, fmt_int, markdown_table
@@ -164,14 +164,12 @@ def errors_section(errors: pl.DataFrame) -> list[str]:
         return lines
     labeled = errors.with_columns(
         pl.col("mode").replace_strict(MODE_LABELS, default=pl.col("mode"))
-    ).with_columns(
-        pl.col("mode").replace_strict(MODE_MEANINGS, default="").alias("意味")
     )
     lines.extend(
         [
             markdown_table(
                 labeled,
-                ["task", "mode", "意味", "n"],
+                ["task", "mode", "n"],
                 formatters={"n": _fmt_count},
             ),
             "",
