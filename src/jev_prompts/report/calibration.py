@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: MIT
 
-"""confidence を 10 ビンに分けた較正表。"""
+"""較正の確率を 10 ビンに分けた表。"""
 
 from __future__ import annotations
 
@@ -19,7 +19,7 @@ CALIBRATION_COLUMNS: Final[tuple[str, ...]] = (
     "bin_low",
     "bin_high",
     "n",
-    "mean_confidence",
+    "mean_probability",
     "accuracy",
     "ece",
 )
@@ -28,12 +28,12 @@ CALIBRATION_COLUMNS: Final[tuple[str, ...]] = (
 def calibration_table(logs: pl.DataFrame) -> pl.DataFrame:
     """条件ごとのビン別正解率。空ビンも 10 本そろえる。"""
     prepared = prepare_cases(logs)
-    scored = prepared.filter(pl.col("cal_confidence").is_not_null())
+    scored = prepared.filter(pl.col("cal_probability").is_not_null())
     if scored.height == 0:
         return pl.DataFrame(schema=_schema())
     last_bin = ECE_BINS - 1
     binned = scored.with_columns(
-        bin=(pl.col("cal_confidence") * ECE_BINS)
+        bin=(pl.col("cal_probability") * ECE_BINS)
         .floor()
         .clip(0, last_bin)
         .cast(pl.Int8)
@@ -41,7 +41,7 @@ def calibration_table(logs: pl.DataFrame) -> pl.DataFrame:
     occupied = binned.group_by([*GROUP_KEYS, "bin"]).agg(
         n=pl.len(),
         accuracy=pl.col("correct").mean(),
-        mean_confidence=pl.col("cal_confidence").mean(),
+        mean_probability=pl.col("cal_probability").mean(),
     )
     grid = _bin_grid(scored)
     ece = aggregate_metrics(logs).select(*GROUP_KEYS, "ece")
@@ -73,7 +73,7 @@ def _schema() -> dict[str, pl.DataType]:
         "bin_low": pl.Float64,
         "bin_high": pl.Float64,
         "n": pl.UInt32,
-        "mean_confidence": pl.Float64,
+        "mean_probability": pl.Float64,
         "accuracy": pl.Float64,
         "ece": pl.Float64,
     }

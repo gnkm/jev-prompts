@@ -24,12 +24,13 @@ from jev_prompts.report.forbidden import reject_forbidden_files, reject_forbidde
 from jev_prompts.report.intervals import metric_intervals
 from jev_prompts.report.plots import write_task_figures
 from jev_prompts.report.prices import ModelPrice
+from jev_prompts.report.ranking import risk_coverage_table
 from jev_prompts.report.render import noul_hash_note, render_tables
 from jev_prompts.runners.fanout import drop_fanout_rows
 from jev_prompts.runners.schema import REQUEST_LOG_COLUMNS, to_published
 from jev_prompts.stats.compare import compare_paired
 
-_MANAGED_FIGURE_PREFIXES = ("reliability-", "cost-accuracy-")
+_MANAGED_FIGURE_PREFIXES = ("reliability-", "cost-accuracy-", "risk-coverage-")
 
 
 @dataclass(frozen=True, slots=True)
@@ -97,7 +98,8 @@ def _build_report(
         frame, n_bootstrap=n_bootstrap, ci_level=ci_level, seed=seed
     )
     calib = calibration_table(frame)
-    figures = _write_figures(metrics, calib, figures_dir)
+    ranking = risk_coverage_table(frame)
+    figures = _write_figures(metrics, calib, ranking, figures_dir)
     counted = errors if errors is not None else classify_a_errors(frame)
     paired = (
         compare_paired(frame, n_bootstrap=n_bootstrap, ci_level=ci_level, seed=seed)
@@ -108,6 +110,7 @@ def _build_report(
         metrics=metrics,
         intervals=intervals,
         calib=calib,
+        ranking=ranking,
         figures=figures,
         dest=staging,
         paired=paired,
@@ -170,7 +173,7 @@ def _public_logs(logs: pl.DataFrame) -> pl.DataFrame:
 
 
 def _write_figures(
-    metrics: pl.DataFrame, calib: pl.DataFrame, dest: Path
+    metrics: pl.DataFrame, calib: pl.DataFrame, ranking: pl.DataFrame, dest: Path
 ) -> list[Path]:
     paths: list[Path] = []
     if metrics.height == 0:
@@ -182,6 +185,11 @@ def _write_figures(
                 task=str(task),
                 metrics=metrics.filter(pl.col("task") == task),
                 calib=calib.filter(pl.col("task") == task) if calib.height else calib,
+                ranking=(
+                    ranking.filter(pl.col("task") == task)
+                    if ranking.height
+                    else ranking
+                ),
                 dest=dest,
             )
         )

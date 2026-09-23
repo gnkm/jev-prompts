@@ -27,6 +27,7 @@ from jev_prompts.stats.bootstrap import (
 from jev_prompts.stats.holm import holm_adjust
 from jev_prompts.stats.mcnemar import mcnemar_p_value
 from jev_prompts.stats.summaries import (
+    expected_calibration_error,
     mean_abs_error,
     mean_binary,
     mean_optional,
@@ -152,6 +153,24 @@ def _rows_for_split(
                 n_bootstrap=n_bootstrap,
                 ci_level=ci_level,
                 rng=rng,
+                metrics=_metric_kinds(task),
+            )
+        )
+    for other in others:
+        paired = _pair_conditions(subset, baseline, other)
+        if paired is None:
+            continue
+        rows.extend(
+            _rows_for_pair(
+                paired,
+                task=task,
+                split=split,
+                baseline=baseline,
+                other=other,
+                n_bootstrap=n_bootstrap,
+                ci_level=ci_level,
+                rng=rng,
+                metrics=(("ece", "bootstrap"),),
             )
         )
     return rows
@@ -173,7 +192,8 @@ def _pair_conditions(
         "pred",
         "gold_score",
         "gold_yes",
-        "cal_confidence",
+        "threshold_signal",
+        "cal_probability",
         "primary_valid",
     )
     left = subset.filter(pl.col("condition") == baseline).select(list(keep))
@@ -196,9 +216,10 @@ def _rows_for_pair(
     n_bootstrap: int,
     ci_level: float,
     rng: random.Random,
+    metrics: tuple[tuple[str, str], ...],
 ) -> list[dict[str, object]]:
     rows: list[dict[str, object]] = []
-    for metric, kind in _metric_kinds(task):
+    for metric, kind in metrics:
         row = _one_metric(
             paired,
             metric=metric,
@@ -221,9 +242,15 @@ def _rows_for_pair(
 
 def _metric_kinds(task: str) -> tuple[tuple[str, str], ...]:
     if task == "choice":
-        return (("accuracy", "mcnemar"), ("confidence", "bootstrap"))
+        return (
+            ("accuracy", "mcnemar"),
+            ("confidence", "bootstrap"),
+        )
     if task == "score":
-        return (("mae", "bootstrap"), ("confidence", "bootstrap"))
+        return (
+            ("mae", "bootstrap"),
+            ("confidence", "bootstrap"),
+        )
     if task == "noul":
         return (
             ("accuracy", "mcnemar"),
@@ -301,6 +328,8 @@ def _stat_for(metric: str):
         return mean_abs_error
     if metric == "auc":
         return pairwise_auc
+    if metric == "ece":
+        return expected_calibration_error
     return mean_optional
 
 
@@ -313,6 +342,8 @@ def _series_for_metric(
         return _mae_pairs(paired)
     if metric == "auc":
         return _auc_pairs(paired)
+    if metric == "ece":
+        return _ece_pairs(paired)
     return _confidence_pairs(paired)
 
 
@@ -346,10 +377,22 @@ def _auc_pairs(paired: pl.DataFrame) -> tuple[list[object], list[object]]:
 
 def _confidence_pairs(paired: pl.DataFrame) -> tuple[list[object], list[object]]:
     rows = paired.filter(
-        pl.col("cal_confidence").is_not_null()
-        & pl.col("cal_confidence_other").is_not_null()
+        pl.col("threshold_signal").is_not_null()
+        & pl.col("threshold_signal_other").is_not_null()
     )
-    return rows["cal_confidence"].to_list(), rows["cal_confidence_other"].to_list()
+    return rows["threshold_signal"].to_list(), rows["threshold_signal_other"].to_list()
+
+
+def _ece_pairs(paired: pl.DataFrame) -> tuple[list[object], list[object]]:
+    rows = paired.filter(
+        pl.col("cal_probability").is_not_null()
+        & pl.col("cal_probability_other").is_not_null()
+    )
+    gold = rows["correct"].to_list()
+    gold_other = rows["correct_other"].to_list()
+    left = list(zip(rows["cal_probability"].to_list(), gold, strict=True))
+    right = list(zip(rows["cal_probability_other"].to_list(), gold_other, strict=True))
+    return left, right
 
 
 def _attach_holm(frame: pl.DataFrame) -> pl.DataFrame:

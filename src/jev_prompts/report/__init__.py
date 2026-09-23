@@ -12,6 +12,7 @@ from jev_prompts.report.intervals import (
     PRIMARY_METRIC,
     metric_intervals,
 )
+from jev_prompts.report.ranking import RISK_COVERAGE_COLUMNS, risk_coverage_table
 from jev_prompts.report.write import WrittenReport, write_report
 
 __all__ = [
@@ -19,9 +20,11 @@ __all__ = [
     "FORBIDDEN_TOKENS",
     "INTERVAL_COLUMNS",
     "PRIMARY_METRIC",
+    "RISK_COVERAGE_COLUMNS",
     "ReportError",
     "WrittenReport",
     "calibration_table",
     "metric_intervals",
+    "risk_coverage_table",
     "write_report",
 ]

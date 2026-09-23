@@ -19,6 +19,7 @@ from jev_prompts.report import (
     FORBIDDEN_TOKENS,
     ReportError,
     calibration_table,
+    risk_coverage_table,
     write_report,
 )
 from jev_prompts.report.cli import app
@@ -45,13 +46,14 @@ def _log(
     confidence: float | None = 0.5,
     usage_tokens: int | None = 10,
     latency_ms: float | None = 10.0,
+    probabilities: dict[str, float] | None = None,
 ) -> RequestLog:
     return RequestLog(
         case_id=case_id,
         task=task,  # type: ignore[arg-type]
         condition=condition,  # type: ignore[arg-type]
         split=split,  # type: ignore[arg-type]
-        probabilities={"x": 1.0},
+        probabilities=probabilities if probabilities is not None else {"x": 1.0},
         gold=gold,
         content_hash=HASH_A,
         model="typesafe/jev-1.13",
@@ -84,6 +86,7 @@ def _choice_logs() -> list[RequestLog]:
                     condition=condition,
                     confidence=conf,
                     usage_tokens=tokens + tokens_shift,
+                    probabilities={answer: conf, "other": max(0.0, 1.0 - conf)},
                 )
             )
     return logs
@@ -104,16 +107,22 @@ def test_write_report_links_figures_and_omits_body(tmp_path: Path) -> None:
     text = written.markdown.read_text(encoding="utf-8")
     assert written.markdown.name == "tables.md"
     assert "](figures/reliability-choice.svg)" in text
+    assert "](figures/risk-coverage-choice.svg)" in text
     assert "](figures/cost-accuracy-choice.svg)" in text
     assert "測定表" in text
     assert "概要" not in text
     assert "考察" not in text
     assert (dest / "figures/reliability-choice.svg").is_file()
+    assert (dest / "figures/risk-coverage-choice.svg").is_file()
     assert (dest / "figures/cost-accuracy-choice.svg").is_file()
     assert "top1" in text
     assert "error_rate" in text
     assert "n_primary" in text
     assert "ECE" in text or "ece" in text
+    assert "brier" in text
+    assert "signal_auroc" in text
+    assert "mean_probability" in text
+    assert "mean_confidence" not in text
     assert "tokens_per_1000" in text
     _scan_public([written.markdown, *written.figures])
 
@@ -169,6 +178,112 @@ def test_calibration_has_ten_bins_and_ece() -> None:
     assert occupied.height == 3
     expected = (0.25 * abs(1 - 0.15)) + (0.5 * abs(0.5 - 0.23)) + (0.25 * abs(1 - 0.95))
     assert occupied["ece"][0] == pytest.approx(expected)
+    assert "mean_probability" in table.columns
+    assert "mean_confidence" not in table.columns
+
+
+def test_risk_coverage_keeps_high_signal_first() -> None:
+    logs = local_frame(
+        [
+            _log(
+                case_id="c0",
+                task="choice",
+                gold="a",
+                answer="a",
+                confidence=0.9,
+                probabilities={"a": 0.9, "b": 0.1},
+            ),
+            _log(
+                case_id="c1",
+                task="choice",
+                gold="a",
+                answer="b",
+                confidence=0.1,
+                probabilities={"b": 0.6, "a": 0.4},
+            ),
+        ]
+    )
+    table = risk_coverage_table(logs)
+    half = table.filter(pl.col("coverage") == 0.5)
+    assert half.height == 1
+    assert half["n_kept"][0] == 1
+    assert half["accuracy"][0] == pytest.approx(1.0)
+    full = table.filter(pl.col("coverage") == 1.0)
+    assert full["accuracy"][0] == pytest.approx(0.5)
+
+
+def test_risk_coverage_includes_missing_signal_as_lowest() -> None:
+    logs = local_frame(
+        [
+            _log(
+                case_id="c0",
+                task="choice",
+                gold="a",
+                answer="a",
+                confidence=0.9,
+                probabilities={"a": 0.9, "b": 0.1},
+            ),
+            RequestLog.failed(
+                case_id="c1",
+                task="choice",
+                condition="A",
+                split="test",
+                gold="a",
+                content_hash=HASH_A,
+                error="parse",
+            ),
+        ]
+    )
+    table = risk_coverage_table(logs)
+    half = table.filter(pl.col("coverage") == 0.5)
+    assert half["n_kept"][0] == 1
+    assert half["accuracy"][0] == pytest.approx(1.0)
+    full = table.filter(pl.col("coverage") == 1.0)
+    assert full["n_kept"][0] == 2
+    assert full["accuracy"][0] == pytest.approx(0.5)
+
+
+def test_risk_coverage_tie_uses_group_expectation() -> None:
+    shared = dict(task="choice", gold="a", confidence=0.5)
+    first = local_frame(
+        [
+            _log(
+                case_id="z-high",
+                answer="a",
+                probabilities={"a": 0.5, "b": 0.5},
+                **shared,
+            ),
+            _log(
+                case_id="a-low",
+                answer="b",
+                probabilities={"b": 0.5, "a": 0.5},
+                **shared,
+            ),
+        ]
+    )
+    swapped = local_frame(
+        [
+            _log(
+                case_id="a-high",
+                answer="a",
+                probabilities={"a": 0.5, "b": 0.5},
+                **shared,
+            ),
+            _log(
+                case_id="z-low",
+                answer="b",
+                probabilities={"b": 0.5, "a": 0.5},
+                **shared,
+            ),
+        ]
+    )
+    for logs in (first, swapped):
+        table = risk_coverage_table(logs)
+        half = table.filter(pl.col("coverage") == 0.5)
+        assert half["n_kept"][0] == 1
+        assert half["accuracy"][0] == pytest.approx(0.5)
+        full = table.filter(pl.col("coverage") == 1.0)
+        assert full["accuracy"][0] == pytest.approx(0.5)
 
 
 def test_published_records_are_enough(tmp_path: Path) -> None:
@@ -253,6 +368,25 @@ def test_module_help_lists_report() -> None:
     )
     assert completed.returncode == 0, completed.stderr
     assert "published" in completed.stdout
+
+
+def test_handwritten_report_describes_calibration_probability() -> None:
+    text = (REPO_ROOT / "results" / "report.md").read_text(encoding="utf-8")
+    assert "### 2.3 モデルと実行" in text
+    assert "### 2.4 指標" in text
+    assert "### 4.2 採用した判定の確率の較正" in text
+    assert "### 4.5 反省と限界" in text
+    assert "採用したラベルの確率" in text
+    assert "`round(score)` と同じ段階の確率" in text
+    assert "max(p, 1 − p)" in text
+    assert "LLM は自己申告の `confidence`" in text
+    assert "Brier" in text
+    assert "risk-coverage" in text
+    assert "初版は Jev の `confidence` を正解の確率として ECE を計算していた" in text
+    assert "デモの式 `(K × 最大確率 − 1) / (K − 1)` どおりには" in text
+    assert "全課題で 0.1 未満" not in text
+    assert "confidence 0.9 は最大確率" not in text
+    assert "A が 3 課題とも最小だったわけではない" in text
 
 
 def test_root_readme_links_report() -> None:

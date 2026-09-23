@@ -24,6 +24,7 @@ def render_tables(
     metrics: pl.DataFrame,
     intervals: pl.DataFrame,
     calib: pl.DataFrame,
+    ranking: pl.DataFrame,
     figures: Sequence[Path],
     dest: Path,
     paired: pl.DataFrame,
@@ -54,6 +55,7 @@ def render_tables(
                 metrics=_task_frame(metrics, task),
                 intervals=_task_frame(intervals, task),
                 calib=_task_frame(calib, task),
+                ranking=_task_frame(ranking, task),
                 figures=figures,
                 dest=dest,
             )
@@ -73,12 +75,16 @@ def _task_section(
     metrics: pl.DataFrame,
     intervals: pl.DataFrame,
     calib: pl.DataFrame,
+    ranking: pl.DataFrame,
     figures: Sequence[Path],
     dest: Path,
 ) -> list[str]:
     primary = PRIMARY_METRIC.get(task, "top1")
     reliability = _figure_link(
         figures, dest, f"reliability-{task}.svg", f"{task} reliability"
+    )
+    coverage = _figure_link(
+        figures, dest, f"risk-coverage-{task}.svg", f"{task} risk coverage"
     )
     cost = _figure_link(
         figures, dest, f"cost-accuracy-{task}.svg", f"{task} cost accuracy"
@@ -95,6 +101,12 @@ def _task_section(
         _calibration_md(calib),
         "",
         reliability,
+        "",
+        "#### risk-coverage",
+        "",
+        _ranking_md(ranking),
+        "",
+        coverage,
         "",
         "#### コスト × 精度",
         "",
@@ -197,6 +209,8 @@ def _matrix_table(
         primary: fmt_float,
         "confident_error_rate": fmt_float,
         "ece": fmt_float,
+        "brier": fmt_float,
+        "signal_auroc": fmt_float,
         "tokens_per_1000": fmt_float,
         "latency_p50_ms": fmt_float,
         "latency_p95_ms": fmt_float,
@@ -210,6 +224,8 @@ def _matrix_table(
         [
             "confident_error_rate",
             "ece",
+            "brier",
+            "signal_auroc",
             "tokens_per_1000",
             "latency_p50_ms",
             "latency_p95_ms",
@@ -253,7 +269,7 @@ def _attach_ci(
 
 def _calibration_md(calib: pl.DataFrame) -> str:
     if calib.height == 0:
-        return "較正に使える confidence が無い。"
+        return "較正に使える確率が無い。"
     return markdown_table(
         _sort_conditions(calib),
         [
@@ -262,7 +278,7 @@ def _calibration_md(calib: pl.DataFrame) -> str:
             "bin_low",
             "bin_high",
             "n",
-            "mean_confidence",
+            "mean_probability",
             "accuracy",
             "ece",
         ],
@@ -271,9 +287,24 @@ def _calibration_md(calib: pl.DataFrame) -> str:
             "bin_low": fmt_float,
             "bin_high": fmt_float,
             "n": fmt_int,
-            "mean_confidence": fmt_float,
+            "mean_probability": fmt_float,
             "accuracy": fmt_float,
             "ece": fmt_float,
+        },
+    )
+
+
+def _ranking_md(ranking: pl.DataFrame) -> str:
+    if ranking.height == 0:
+        return "閾値の信号が無い。"
+    return markdown_table(
+        _sort_conditions(ranking),
+        ["condition", "coverage", "n_kept", "accuracy", "risk"],
+        formatters={
+            "coverage": fmt_float,
+            "n_kept": fmt_int,
+            "accuracy": fmt_float,
+            "risk": fmt_float,
         },
     )
 

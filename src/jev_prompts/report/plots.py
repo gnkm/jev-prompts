@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: MIT
 
-"""reliability diagram とコスト×精度の散布図。"""
+"""reliability diagram、risk-coverage、コスト×精度の散布図。"""
 
 from __future__ import annotations
 
@@ -19,14 +19,17 @@ def write_task_figures(
     task: str,
     metrics: pl.DataFrame,
     calib: pl.DataFrame,
+    ranking: pl.DataFrame,
     dest: Path,
 ) -> list[Path]:
     dest.mkdir(parents=True, exist_ok=True)
     reliability = dest / f"reliability-{task}.svg"
+    coverage = dest / f"risk-coverage-{task}.svg"
     cost = dest / f"cost-accuracy-{task}.svg"
     _reliability_diagram(calib, reliability)
+    _risk_coverage(ranking, coverage)
     _cost_accuracy(metrics, task, cost)
-    return [reliability, cost]
+    return [reliability, coverage, cost]
 
 
 def _pyplot():
@@ -47,16 +50,38 @@ def _reliability_diagram(calib: pl.DataFrame, path: Path) -> None:
         if part.height == 0:
             continue
         ax.plot(
-            part["mean_confidence"].to_list(),
+            part["mean_probability"].to_list(),
             part["accuracy"].to_list(),
             marker="o",
             label=condition,
         )
-    ax.set_xlabel("confidence")
+    ax.set_xlabel("probability")
     ax.set_ylabel("accuracy")
     ax.set_xlim(0.0, 1.0)
     ax.set_ylim(0.0, 1.0)
     if _conditions(calib):
+        ax.legend()
+    _save(fig, plt, path)
+
+
+def _risk_coverage(ranking: pl.DataFrame, path: Path) -> None:
+    plt = _pyplot()
+    fig, ax = plt.subplots()
+    for condition in _conditions(ranking):
+        part = ranking.filter(pl.col("condition") == condition)
+        if part.height == 0:
+            continue
+        ax.plot(
+            part["coverage"].to_list(),
+            part["accuracy"].to_list(),
+            marker="o",
+            label=condition,
+        )
+    ax.set_xlabel("coverage")
+    ax.set_ylabel("accuracy")
+    ax.set_xlim(0.0, 1.0)
+    ax.set_ylim(0.0, 1.0)
+    if _conditions(ranking):
         ax.legend()
     _save(fig, plt, path)
 
