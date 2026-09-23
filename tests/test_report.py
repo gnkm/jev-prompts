@@ -267,9 +267,7 @@ def test_checked_in_results_omit_forbidden_tokens() -> None:
     """生成物に本文キーが残らないこと。report.md は結果を見て書くので対象外。"""
     root = REPO_ROOT / "results"
     paths = [
-        path
-        for path in root.rglob("*")
-        if path.is_file() and path.name != "report.md"
+        path for path in root.rglob("*") if path.is_file() and path.name != "report.md"
     ]
     assert paths
     for path in paths:
