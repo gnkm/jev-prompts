@@ -57,15 +57,16 @@ def test_xenon_passes_on_current_tree() -> None:
     assert result.returncode == 0, result.stdout + result.stderr
 
 
-def test_readme_and_ci_name_xenon_thresholds() -> None:
-    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+def test_architecture_and_ci_name_xenon_thresholds() -> None:
+    architecture = (ROOT / "ARCHITECTURE.md").read_text(encoding="utf-8")
     workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
     pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
     cfg = _xenon_cfg()
-    assert "xenon" in readme.lower()
-    assert "radon" in readme.lower()
+    assert "xenon" in architecture.lower()
+    assert "radon" in architecture.lower()
+    assert "max_absolute" in architecture
     assert "xenon" in workflow
-    assert str(cfg["max_absolute"]) in readme
+    assert str(cfg["max_absolute"]) in architecture
     assert "[tool.xenon]" in pyproject
     assert "[tool.radon]" in pyproject
 

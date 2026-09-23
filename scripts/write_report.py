@@ -1,4 +1,4 @@
-"""公開 markdown レポートの薄い入口。ロジックは jev_prompts にある。"""
+"""測定表と図を書く薄い入口。report.md は書かない。ロジックは jev_prompts にある。"""
 
 from jev_prompts.report.cli import report_command
 

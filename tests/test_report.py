@@ -102,8 +102,12 @@ def test_write_report_links_figures_and_omits_body(tmp_path: Path) -> None:
     dest = tmp_path / "results"
     written = write_report(local_frame(_choice_logs()), dest, n_bootstrap=N_BOOT)
     text = written.markdown.read_text(encoding="utf-8")
+    assert written.markdown.name == "tables.md"
     assert "](figures/reliability-choice.svg)" in text
     assert "](figures/cost-accuracy-choice.svg)" in text
+    assert "測定表" in text
+    assert "概要" not in text
+    assert "考察" not in text
     assert (dest / "figures/reliability-choice.svg").is_file()
     assert (dest / "figures/cost-accuracy-choice.svg").is_file()
     assert "top1" in text
@@ -176,10 +180,20 @@ def test_published_records_are_enough(tmp_path: Path) -> None:
     _scan_public([written.markdown, *written.figures])
 
 
+def test_write_leaves_handwritten_report(tmp_path: Path) -> None:
+    dest = tmp_path / "results"
+    dest.mkdir()
+    report = dest / "report.md"
+    report.write_text("手書きの報告\n", encoding="utf-8")
+    write_report(local_frame(_choice_logs()), dest, n_bootstrap=N_BOOT)
+    assert report.read_text(encoding="utf-8") == "手書きの報告\n"
+    assert (dest / "tables.md").is_file()
+
+
 def test_rejects_forbidden_token_in_markdown(tmp_path: Path) -> None:
     dest = tmp_path / "out"
     write_report(local_frame(_choice_logs()), dest, n_bootstrap=N_BOOT)
-    dirty = dest / "report.md"
+    dirty = dest / "tables.md"
     dirty.write_text(dirty.read_text(encoding="utf-8") + "\nquery\n", encoding="utf-8")
     with pytest.raises(ReportError, match="query"):
         from jev_prompts.report.forbidden import reject_forbidden_files
@@ -204,10 +218,11 @@ def test_cli_report_writes_markdown(tmp_path: Path) -> None:
         ],
     )
     assert result.exit_code == 0, result.stdout + result.stderr
-    assert (dest / "report.md").is_file()
-    text = (dest / "report.md").read_text(encoding="utf-8")
+    assert (dest / "tables.md").is_file()
+    assert not (dest / "report.md").exists()
+    text = (dest / "tables.md").read_text(encoding="utf-8")
     assert "](figures/reliability-choice.svg)" in text
-    _scan_public([dest / "report.md", *dest.joinpath("figures").glob("*.svg")])
+    _scan_public([dest / "tables.md", *dest.joinpath("figures").glob("*.svg")])
 
 
 def test_cli_report_without_published_exits_nonzero(tmp_path: Path) -> None:
@@ -240,25 +255,20 @@ def test_module_help_lists_report() -> None:
     assert "published" in completed.stdout
 
 
-def test_root_readme_links_results_readme() -> None:
+def test_root_readme_links_report() -> None:
     readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
-    assert "results/README.md" in readme
+    assert "results/report.md" in readme
     assert "python -m jev_prompts report" in readme
-    assert "scripts/write_report.py" in readme
-
-
-def test_results_readme_mentions_measurements() -> None:
-    text = (REPO_ROOT / "results/README.md").read_text(encoding="utf-8")
-    assert "測定値" in text
-    assert "report.md" in text
-    assert "findings.md" in text
-    assert "prices.md" in text
-    assert "入力本文" in text
+    assert "results/README.md" not in readme
+    assert "findings.md" not in readme
 
 
 def test_checked_in_results_omit_forbidden_tokens() -> None:
+    """生成物に本文キーが残らないこと。report.md は結果を見て書くので対象外。"""
     root = REPO_ROOT / "results"
-    paths = [path for path in root.rglob("*") if path.is_file()]
+    paths = [
+        path for path in root.rglob("*") if path.is_file() and path.name != "report.md"
+    ]
     assert paths
     for path in paths:
         text = path.read_bytes().decode("utf-8", errors="ignore")
@@ -269,5 +279,5 @@ def test_checked_in_results_omit_forbidden_tokens() -> None:
 def test_biome_skips_generated_figures() -> None:
     text = (REPO_ROOT / "biome.json").read_text(encoding="utf-8")
     assert "!results/figures" in text
-    readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
-    assert "biome ci" in readme
+    architecture = (REPO_ROOT / "ARCHITECTURE.md").read_text(encoding="utf-8")
+    assert "biome ci" in architecture

@@ -128,6 +128,8 @@ flowchart LR
 - A の改訂は dev 40 件のみ。報告数値は test 60 件のみ。改訂は最大 3 回、ログ必須。
 - 投機的 fan-out は精度比較と同一ランに入れない。A の質問群を「1 回にまとめる /
   n 回に分割する」別ランとし、コスト・遅延・一致率だけを比べる。
+  まとめて 1 回のログは `data/logs/fanout-batched.jsonl`、分割して n 回のログは
+  `data/logs/fanout-split.jsonl`。本ランの `eval.jsonl` やその集計には混ぜない。
 
 合格ライン、仮説 H1〜H4、指標の定義は設計書の事前宣言をそのまま使う。
 結果を見てから指標を足さない。
@@ -216,7 +218,8 @@ REUSE の SPDX 識別子をファイルに付け、`reuse lint` で検証する�
 `data/cases/*.jsonl` に置いてよいのはケース ID、split、gold、本文ハッシュ、
 抽出シードまで。本文は `data/raw/` に置き、`.gitignore` する。
 公開用 `results/` も本文を持たない。再集計用のフルログ（`state_json` /
-`question_json` を含む）はローカル専用とし、コミットしない。
+`question_json` を含む）は `data/logs/` に置き、コミットしない。
+公開行は `PublishedRecord`（本文キーなし）だけを `results/` に書く。
 
 ## 7. データモデル
 
@@ -301,7 +304,9 @@ flowchart TB
 共通。
 
 - ベース URL は `https://openrouter.ai/api`。認証は `Authorization: Bearer` に
-  OpenRouter キーだけを付ける。
+  環境変数 `OPENROUTER_API_KEY` だけを付ける。リポジトリに置かない。
+- Jev は `POST /api/v1/systemone`。比較用 LLM は `POST /api/v1/chat/completions`。
+  Jev を Chat Completions の URL に送らない。
 - ライブラリは HTTP クライアント 1 本で足りる。OpenAI 互換 SDK を LLM 用に
   足してもよいが、Jev を Chat Completions クライアントに流し込まない。
 - OpenRouter には Decisions API（`POST /api/alpha/decisions`）もある。実験は
@@ -358,9 +363,12 @@ A と L2 の作成時間を記録し、工数を揃えたことをレポート�
 - **ブートストラップ**: 再標本で正答率などの指標の区間を出す。
 - **Holm**: 同じデータで A 対 B1、A 対 B2 のように何度も検定するときの補正である。
 
-公開物は `results/` の markdown である。読む対象は常にそのファイルで、画像単体や
-別アプリを開く必要はない。設計書が求める 3 種は、Polars で組んだ表に加え、
-作図ライブラリで出した図を同じ markdown から参照する。ライブラリは固定しない。
+読む対象は `results/report.md` である。本文は結果を見て書き、コマンドでは作らない。
+`python -m jev_prompts report`（薄い入口は `scripts/write_report.py`）が書くのは
+`results/tables.md` と図だけであり、`report.md` は上書きしない。
+設計書が求める 3 種は、Polars で組んだ表に加え、作図ライブラリで出した図である。
+ライブラリは固定しない。表と図は `tables.md` と `results/figures/` に置き、
+報告に載せる数値と読みは `report.md` に写す。
 
 1. 課題ごとの条件 × 指標マトリクス（信頼区間付き）
 2. 条件別の較正（10 ビンの表と reliability diagram 画像。ECE を併記）
@@ -381,7 +389,19 @@ A と L2 の作成時間を記録し、工数を揃えたことをレポート�
 | reuse lint | SPDX と LICENSE ファイルの対応 |
 
 CI は上の静的検証とユニットテストまで。有料 API を叩く本ランは CI に載せない。
+JavaScript 側は `pnpm exec biome ci .`。`results/figures/` の SVG は対象外。
 ワークフローを追加したら README 先頭付近に状況バッジを出す。
+
+複雑度ゲート（Xenon / Radon）の閾値は `pyproject.toml` の `[tool.xenon]` が正本。
+ブロックが閾値より悪い rank になると CI が失敗する。緩める変更は CODEOWNERS 対象。
+
+| 項目 | 閾値 | 落ちる条件 |
+| --- | --- | --- |
+| `max_absolute` | C | いずれかのブロックが D 以上（循環的複雑度 21 以上） |
+| `max_modules` | B | いずれかのモジュールが C 以上（同 11 以上） |
+| `max_average` | A | 平均が B 以上（同 6 以上） |
+
+対象パスは `src` / `scripts` / `tests`。報告だけ見るときは `uv run radon cc -s src scripts tests`。
 
 ユニットテストで必ず固定する例。
 
@@ -397,9 +417,11 @@ CI は上の静的検証とユニットテストまで。有料 API を叩く本
 - 言語: Python。パッケージマネージャは uv。`uv pip` は使わない。
 - CLI は Typer。`argparse` で入口を増やさない。
 - 表は Polars。ログの読み書きと条件ごとの集計に使う。
-- 再現ランは Podman。資格情報は `podman secret` で OpenRouter キー 1 本を
-  マウントする。TypeSafe 用の秘匿情報は持たない。
-- 開発時の `.env` は gitignore 済みだが、正本の受け渡し方は Podman secret とする。
+- コードが読む資格情報は環境変数 `OPENROUTER_API_KEY` だけである。
+  リポジトリに置かない。`.env` は gitignore 済みで、ローダは無い。
+  TypeSafe 用の秘匿情報は持たない。
+- Containerfile / Dockerfile はリポジトリに無い。コンテナで包むときの受け渡しは
+  `podman secret` で同じ環境変数へ載せる想定だが、イメージ定義は同梱していない。
 - ホストに残るフルログは個人情報（SMS 本文など）を含み得る。公開前に
   `results/` へ本文なしで書き出す経路以外を配付しない。
 

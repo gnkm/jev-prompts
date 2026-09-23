@@ -33,7 +33,6 @@ def test_help_lists_systemone_and_chat_model_ids() -> None:
     assert "preflight" in text
     assert "fanout" in text
     assert "report" in text
-    assert "findings" in text
 
 
 def test_module_help_subprocess() -> None:

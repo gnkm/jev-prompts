@@ -7,7 +7,8 @@
 - 機能追加は GitHub の **Feature** Issue テンプレートで起票する（振る舞い・検証・Blocked by を含める）。
 - PR は関連 Issue に `Closes #N` で紐づける。テンプレートの Verification / Test plan を埋める。
 - Issue のクローズは、`verifier` が検証コマンドを通したあとだけとする。
-- CI ワークフローを追加・変更したら、README に状況バッジを必ず出す。
+- `docs/source-of-truth/` は人間だけが編集する。変更が要るときは Issue で人間に依頼し、エージェントはファイルを変えない。
+- CI ワークフロー（`.github/workflows/`）を追加・変更したら、README 先頭付近にそのワークフローの状況バッジを出す。
 
 ## Git ブランチ命名規則
 

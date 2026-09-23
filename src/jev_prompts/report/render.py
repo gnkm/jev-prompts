@@ -2,34 +2,50 @@
 #
 # SPDX-License-Identifier: MIT
 
-"""測定値の markdown 本文。入力本文は書かない。"""
+"""測定表の markdown。報告の本文は書かない。"""
 
 from __future__ import annotations
 
 from collections.abc import Sequence
+from datetime import date
 from pathlib import Path
 
 import polars as pl
 
 from jev_prompts.prompts.catalog import CONDITIONS
+from jev_prompts.report.a_errors import MODE_LABELS
 from jev_prompts.report.intervals import PRIMARY_METRIC
+from jev_prompts.report.prices import ModelPrice, render_price_table
 from jev_prompts.report.tables import fmt_ci, fmt_float, fmt_int, markdown_table
 
 
-def render_report(
+def render_tables(
     *,
     metrics: pl.DataFrame,
     intervals: pl.DataFrame,
     calib: pl.DataFrame,
     figures: Sequence[Path],
     dest: Path,
+    paired: pl.DataFrame,
+    errors: pl.DataFrame,
+    prices: tuple[ModelPrice, ...] | None,
+    measured_on: date,
+    note: str,
 ) -> str:
+    """表と図へのリンクだけ。report.md の本文はここから出さない。"""
     parts = [
-        "# 公開測定レポート",
+        "# 測定表",
         "",
-        "測定値と図のみ。入力本文は置かない。",
+        "ログから計算した表と図へのリンクである。",
+        "報告の本文は report.md に、結果を見て書く。このファイルは報告ではない。",
+        "",
+        f"測定日: {measured_on.isoformat()}",
+        "",
+        "test 分割のみ。入力本文は置かない。",
         "",
     ]
+    if note:
+        parts.extend([note, ""])
     tasks = _ordered_values(metrics, "task")
     for task in tasks:
         parts.extend(
@@ -43,8 +59,11 @@ def render_report(
             )
         )
     if not tasks:
-        parts.append("測定値が無い。")
-        parts.append("")
+        parts.extend(["測定値が無い。", ""])
+    parts.extend(paired_section(paired))
+    parts.extend(errors_section(errors))
+    if prices:
+        parts.extend(["### 測定単価", "", *render_price_table(prices), ""])
     return "\n".join(parts)
 
 
@@ -65,25 +84,104 @@ def _task_section(
         figures, dest, f"cost-accuracy-{task}.svg", f"{task} cost accuracy"
     )
     return [
-        f"## {task}",
+        f"### {task}",
         "",
-        "### 条件 × 指標",
+        "#### 条件 × 指標",
         "",
         _matrix_table(task, metrics, intervals, primary),
         "",
-        "### 較正",
+        "#### 較正",
         "",
         _calibration_md(calib),
         "",
         reliability,
         "",
-        "### コスト × 精度",
+        "#### コスト × 精度",
         "",
         _cost_table(metrics, primary),
         "",
         cost,
         "",
     ]
+
+
+def noul_hash_note(logs: pl.DataFrame) -> str:
+    """同一本文の重複件数。解釈は書かない。"""
+    if "content_hash" not in logs.columns or "task" not in logs.columns:
+        return ""
+    noul = logs.filter(pl.col("task") == "noul")
+    if "condition" in noul.columns:
+        noul = noul.filter(pl.col("condition") == "A")
+    if noul.height == 0:
+        return ""
+    unique = noul["content_hash"].n_unique()
+    if unique >= noul.height:
+        return ""
+    return (
+        f"noul の test は {noul.height} 行中 content_hash が一意 {unique} 件。"
+        "同一本文の重複を含む測定値をそのまま記録する。"
+    )
+
+
+def paired_section(paired: pl.DataFrame) -> list[str]:
+    if paired.height == 0:
+        return []
+    return [
+        "### 対応あり比較（A 対 他条件）",
+        "",
+        markdown_table(
+            paired,
+            [
+                "task",
+                "other",
+                "metric",
+                "difference",
+                "ci_low",
+                "ci_high",
+                "p_holm",
+            ],
+            formatters={
+                "difference": fmt_float,
+                "ci_low": fmt_float,
+                "ci_high": fmt_float,
+                "p_holm": fmt_float,
+            },
+        ),
+        "",
+    ]
+
+
+def errors_section(errors: pl.DataFrame) -> list[str]:
+    lines = [
+        "### A の誤答件数",
+        "",
+        "条件 A のうち、test で正解と一致しなかった件数を種類ごとに数えた表。",
+        "入力の本文は載せていない。",
+        "",
+    ]
+    if errors.height == 0:
+        lines.extend(["A の誤答は無かった。", ""])
+        return lines
+    labeled = errors.with_columns(
+        pl.col("mode").replace_strict(MODE_LABELS, default=pl.col("mode"))
+    )
+    lines.extend(
+        [
+            markdown_table(
+                labeled,
+                ["task", "mode", "n"],
+                formatters={"n": _fmt_count},
+            ),
+            "",
+        ]
+    )
+    return lines
+
+
+def _fmt_count(value: object) -> str:
+    if value is None:
+        return ""
+    return str(int(value))
 
 
 def _matrix_table(
