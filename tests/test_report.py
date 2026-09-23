@@ -19,6 +19,7 @@ from jev_prompts.report import (
     FORBIDDEN_TOKENS,
     ReportError,
     calibration_table,
+    risk_coverage_table,
     write_report,
 )
 from jev_prompts.report.cli import app
@@ -182,8 +183,6 @@ def test_calibration_has_ten_bins_and_ece() -> None:
 
 
 def test_risk_coverage_keeps_high_signal_first() -> None:
-    from jev_prompts.report import risk_coverage_table
-
     logs = local_frame(
         [
             _log(
@@ -211,6 +210,80 @@ def test_risk_coverage_keeps_high_signal_first() -> None:
     assert half["accuracy"][0] == pytest.approx(1.0)
     full = table.filter(pl.col("coverage") == 1.0)
     assert full["accuracy"][0] == pytest.approx(0.5)
+
+
+def test_risk_coverage_includes_missing_signal_as_lowest() -> None:
+    logs = local_frame(
+        [
+            _log(
+                case_id="c0",
+                task="choice",
+                gold="a",
+                answer="a",
+                confidence=0.9,
+                probabilities={"a": 0.9, "b": 0.1},
+            ),
+            RequestLog.failed(
+                case_id="c1",
+                task="choice",
+                condition="A",
+                split="test",
+                gold="a",
+                content_hash=HASH_A,
+                error="parse",
+            ),
+        ]
+    )
+    table = risk_coverage_table(logs)
+    half = table.filter(pl.col("coverage") == 0.5)
+    assert half["n_kept"][0] == 1
+    assert half["accuracy"][0] == pytest.approx(1.0)
+    full = table.filter(pl.col("coverage") == 1.0)
+    assert full["n_kept"][0] == 2
+    assert full["accuracy"][0] == pytest.approx(0.5)
+
+
+def test_risk_coverage_tie_uses_group_expectation() -> None:
+    shared = dict(task="choice", gold="a", confidence=0.5)
+    first = local_frame(
+        [
+            _log(
+                case_id="z-high",
+                answer="a",
+                probabilities={"a": 0.5, "b": 0.5},
+                **shared,
+            ),
+            _log(
+                case_id="a-low",
+                answer="b",
+                probabilities={"b": 0.5, "a": 0.5},
+                **shared,
+            ),
+        ]
+    )
+    swapped = local_frame(
+        [
+            _log(
+                case_id="a-high",
+                answer="a",
+                probabilities={"a": 0.5, "b": 0.5},
+                **shared,
+            ),
+            _log(
+                case_id="z-low",
+                answer="b",
+                probabilities={"b": 0.5, "a": 0.5},
+                **shared,
+            ),
+        ]
+    )
+    for logs in (first, swapped):
+        table = risk_coverage_table(logs)
+        half = table.filter(pl.col("coverage") == 0.5)
+        assert half["n_kept"][0] == 1
+        assert half["accuracy"][0] == pytest.approx(0.5)
+        full = table.filter(pl.col("coverage") == 1.0)
+        assert full["accuracy"][0] == pytest.approx(0.5)
 
 
 def test_published_records_are_enough(tmp_path: Path) -> None:
