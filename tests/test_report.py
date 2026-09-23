@@ -105,26 +105,44 @@ def test_write_report_links_figures_and_omits_body(tmp_path: Path) -> None:
     dest = tmp_path / "results"
     written = write_report(local_frame(_choice_logs()), dest, n_bootstrap=N_BOOT)
     text = written.markdown.read_text(encoding="utf-8")
-    assert written.markdown.name == "tables.md"
+    _assert_tables_preamble(written.markdown.name, text)
+    _assert_tables_columns(text)
+    _assert_published_figures(dest, text)
+    _scan_public([written.markdown, *written.figures])
+
+
+def _assert_tables_preamble(name: str, text: str) -> None:
+    assert name == "tables.md"
     assert "](figures/reliability-choice.svg)" in text
-    assert "](figures/risk-coverage-choice.svg)" in text
+    assert "risk-coverage" not in text
     assert "](figures/cost-accuracy-choice.svg)" in text
     assert "測定表" in text
     assert "概要" not in text
     assert "考察" not in text
-    assert (dest / "figures/reliability-choice.svg").is_file()
-    assert (dest / "figures/risk-coverage-choice.svg").is_file()
-    assert (dest / "figures/cost-accuracy-choice.svg").is_file()
+
+
+def _assert_tables_columns(text: str) -> None:
     assert "top1" in text
     assert "error_rate" in text
     assert "n_primary" in text
-    assert "ECE" in text or "ece" in text
+    assert "ece" in text
     assert "brier" in text
-    assert "signal_auroc" in text
+    assert "signal_auroc" not in text
     assert "mean_probability" in text
     assert "mean_confidence" not in text
     assert "tokens_per_1000" in text
-    _scan_public([written.markdown, *written.figures])
+
+
+def _assert_published_figures(dest: Path, text: str) -> None:
+    reliability = dest / "figures/reliability-choice.svg"
+    cost = dest / "figures/cost-accuracy-choice.svg"
+    assert reliability.is_file()
+    assert not (dest / "figures/risk-coverage-choice.svg").exists()
+    assert cost.is_file()
+    assert "L1" not in reliability.read_text(encoding="utf-8")
+    assert "L1" in cost.read_text(encoding="utf-8")
+    calib = text.split("#### 較正", maxsplit=1)[1].split("#### コスト", maxsplit=1)[0]
+    assert "| L1 |" not in calib
 
 
 def _score_logs() -> list[RequestLog]:
@@ -381,9 +399,8 @@ def test_handwritten_report_describes_calibration_probability() -> None:
     assert "max(p, 1 − p)" in text
     assert "LLM は自己申告の `confidence`" in text
     assert "Brier" in text
-    assert "risk-coverage" in text
-    assert "初版は Jev の `confidence` を正解の確率として ECE を計算していた" in text
-    assert "デモの式 `(K × 最大確率 − 1) / (K − 1)` どおりには" in text
+    assert "risk-coverage" not in text
+    assert "初版は" not in text
     assert "全課題で 0.1 未満" not in text
     assert "confidence 0.9 は最大確率" not in text
     assert "A が 3 課題とも最小だったわけではない" in text

@@ -8,7 +8,7 @@
 
 | # | 仮説 | 判定に使う指標 |
 | --- | --- | --- |
-| H1 | 一般的な LLM 向けの書き方をそのまま移植すると、Jev 用に書いた場合より精度が落ちる | 条件 A と B1 の主指標の差（test） |
+| H1 | 曖昧な指示一文にすると、Jev 用に書いた場合より精度が落ちる | 条件 A と B1 の主指標の差（test） |
 | H2 | 失敗モードによって効き方の大きさが違う | 条件 B2・B3・C それぞれの A からの低下幅 |
 | H3 | confidence は誤答の予測子として使える。良いプロンプトほど「確信度が高い誤答」が少ない | confident 誤答率、reliability diagram |
 | H4 | 良いプロンプトの Jev は、素朴な LLM と同等以上の精度をより低いコストと遅延で出す | 精度差、1,000件あたりコスト、p95 レイテンシ |
@@ -29,7 +29,7 @@
 | ID | 条件 | A から変えるもの | 対応する失敗モード |
 | --- | --- | --- | --- |
 | A | Jev 作法に沿ったプロンプト | —（基準） | — |
-| B1 | LLM 流の一括指示を移植 | instructions を曖昧な1文に、criteria は名前のみ | Literal reading、複数判断の混在 |
+| B1 | 曖昧な指示 | instructions を曖昧な1文に、criteria は名前のみ | Literal reading、複数判断の混在 |
 | B2 | criteria の欠陥 | criteria のみ（課題ごとに定義） | 選択肢の重複、程度語段階、条件の AND 結合 |
 | B3 | instructions の欠陥 | instructions のみ | Indirection、多次元化、criteria との矛盾 |
 | C | state ノイズ | state のみ（questions は A と同一） | Large state full of irrelevant detail |
@@ -92,7 +92,7 @@ Choice(
 )
 ```
 
-**B1（LLM 流移植）** — `instructions="Analyze this customer message and determine what they need."`、criteria は77意図の名前だけ（全て `None`）、`other` なし。
+**B1（曖昧な指示）** — `instructions="Analyze this customer message and determine what they need."`、criteria は77意図の名前だけ（全て `None`）、`other` なし。
 
 **B2（criteria の欠陥）** — instructions は A と同一。説明を相互に重複させる（手数料系の3意図にどれも "Fees and charges" を付ける）、`not_for` と `examples` を削除、`other` なし。選択肢は77個のままにする（減らすと gold が選択肢外になり精度が定義できない）。
 
@@ -133,7 +133,7 @@ Score(
 )
 ```
 
-**B1（LLM 流移植）** — `instructions="Rate how relevant this product is."`、`criteria=["1", "2", "3", "4"]`。
+**B1（曖昧な指示）** — `instructions="Rate how relevant this product is."`、`criteria=["1", "2", "3", "4"]`。
 
 **B2（criteria の欠陥 ＝ 程度語のみ）** — instructions は A と同一、`criteria=["not relevant", "slightly relevant", "mostly relevant", "highly relevant"]`。補完品を表す言葉がどこにもないので、C のケースが側部の段階に分散するはず。
 
@@ -164,7 +164,7 @@ Noul(
 )
 ```
 
-**B1（LLM 流移植）** — `instructions="Check this message and decide whether there is a problem with it."`、criteria なし。
+**B1（曖昧な指示）** — `instructions="Check this message and decide whether there is a problem with it."`、criteria なし。
 
 **B2（criteria の欠陥 ＝ 条件の AND 結合）** — ` "Is  `message`  unsolicited and does it ask the recipient to send money or personal details?" `。本来 Noul 2問に分けてコードで AND を取るべきもの。1問に潰すと何が起きるかを見る。
 

@@ -18,13 +18,13 @@ import polars as pl
 from jev_prompts.config import BOOTSTRAP_REPLICATES, CI_LEVEL, STATS_SEED
 from jev_prompts.data.schema import BODY_COLUMNS
 from jev_prompts.metrics import aggregate_metrics
+from jev_prompts.prompts.catalog import JEV_CONDITIONS
 from jev_prompts.report.a_errors import classify_a_errors
 from jev_prompts.report.calibration import calibration_table
 from jev_prompts.report.forbidden import reject_forbidden_files, reject_forbidden_text
 from jev_prompts.report.intervals import metric_intervals
 from jev_prompts.report.plots import write_task_figures
 from jev_prompts.report.prices import ModelPrice
-from jev_prompts.report.ranking import risk_coverage_table
 from jev_prompts.report.render import noul_hash_note, render_tables
 from jev_prompts.runners.fanout import drop_fanout_rows
 from jev_prompts.runners.schema import REQUEST_LOG_COLUMNS, to_published
@@ -97,9 +97,8 @@ def _build_report(
     intervals = metric_intervals(
         frame, n_bootstrap=n_bootstrap, ci_level=ci_level, seed=seed
     )
-    calib = calibration_table(frame)
-    ranking = risk_coverage_table(frame)
-    figures = _write_figures(metrics, calib, ranking, figures_dir)
+    calib = _jev_calibration(calibration_table(frame))
+    figures = _write_figures(metrics, calib, figures_dir)
     counted = errors if errors is not None else classify_a_errors(frame)
     paired = (
         compare_paired(frame, n_bootstrap=n_bootstrap, ci_level=ci_level, seed=seed)
@@ -110,7 +109,6 @@ def _build_report(
         metrics=metrics,
         intervals=intervals,
         calib=calib,
-        ranking=ranking,
         figures=figures,
         dest=staging,
         paired=paired,
@@ -172,8 +170,15 @@ def _public_logs(logs: pl.DataFrame) -> pl.DataFrame:
     return frame
 
 
+def _jev_calibration(calib: pl.DataFrame) -> pl.DataFrame:
+    """LLM の自己申告は較正の確率にしない。"""
+    if calib.height == 0 or "condition" not in calib.columns:
+        return calib
+    return calib.filter(pl.col("condition").is_in(list(JEV_CONDITIONS)))
+
+
 def _write_figures(
-    metrics: pl.DataFrame, calib: pl.DataFrame, ranking: pl.DataFrame, dest: Path
+    metrics: pl.DataFrame, calib: pl.DataFrame, dest: Path
 ) -> list[Path]:
     paths: list[Path] = []
     if metrics.height == 0:
@@ -185,11 +190,6 @@ def _write_figures(
                 task=str(task),
                 metrics=metrics.filter(pl.col("task") == task),
                 calib=calib.filter(pl.col("task") == task) if calib.height else calib,
-                ranking=(
-                    ranking.filter(pl.col("task") == task)
-                    if ranking.height
-                    else ranking
-                ),
                 dest=dest,
             )
         )
