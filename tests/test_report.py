@@ -381,9 +381,8 @@ def test_handwritten_report_describes_calibration_probability() -> None:
     assert "max(p, 1 − p)" in text
     assert "LLM は自己申告の `confidence`" in text
     assert "Brier" in text
-    assert "risk-coverage" in text
-    assert "初版は Jev の `confidence` を正解の確率として ECE を計算していた" in text
-    assert "デモの式 `(K × 最大確率 − 1) / (K − 1)` どおりには" in text
+    assert "risk-coverage" not in text
+    assert "初版は" not in text
     assert "全課題で 0.1 未満" not in text
     assert "confidence 0.9 は最大確率" not in text
     assert "A が 3 課題とも最小だったわけではない" in text
